@@ -21,7 +21,7 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Required(CONF_TARGET_IP): cv.string,
     cv.Optional(CONF_TARGET_PORT, default=6980): cv.port,
     cv.Optional(CONF_STREAM_NAME, default="AtomEcho"): cv.string,
-    cv.Optional(CONF_GAIN, default=1.0): cv.positive_float,
+    cv.Optional(CONF_GAIN, default=1.0): cv.float_range(min=0.0),
 }).extend(cv.COMPONENT_SCHEMA)
 
 async def to_code(config):
