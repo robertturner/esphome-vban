@@ -52,9 +52,9 @@ i2c:
 # ─── I2S ─────────────────────────────────────────────────────
 i2s_audio:
   - id: i2s_bus
-    i2s_lrclk_pin: GPIO7
-    i2s_bclk_pin: GPIO8
-    i2s_mclk_pin: GPIO9
+    i2s_lrclk_pin: GPIO3
+    i2s_bclk_pin: GPIO17
+    i2s_mclk_pin: GPIO11
 
 # ─── Codec ES8311 (natif ESPHome) ────────────────────────────
 audio_dac:
@@ -75,7 +75,7 @@ microphone:
     i2s_din_pin: GPIO4
     adc_type: external
     pdm: false
-    channel: left
+    channel: right
     sample_rate: 16000
     bits_per_sample: 16bit
 
