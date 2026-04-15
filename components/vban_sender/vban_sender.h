@@ -1,6 +1,7 @@
 #pragma once
 #include "esphome.h"
 #include "esphome/components/microphone/microphone.h"
+#include "esphome/components/network/util.h"
 
 #include <lwip/sockets.h>
 #include <lwip/netdb.h>
@@ -21,6 +22,8 @@ class VBANSender : public Component {
   void set_target_ip(const std::string &ip) { target_ip_ = ip; }
   void set_target_port(uint16_t port) { target_port_ = port; }
   void set_stream_name(const std::string &name) { stream_name_ = name; }
+
+  float get_setup_priority() const override { return setup_priority::LATE; }
 
   void setup() override {
     sock_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -46,11 +49,19 @@ class VBANSender : public Component {
       mic_->add_data_callback([this](const std::vector<uint8_t> &data) {
         this->send_audio(data.data(), data.size());
       });
-      mic_->start();
     }
 
     ESP_LOGI("vban", "VBAN sender ready -> %s:%d stream=%s",
              target_ip_.c_str(), target_port_, stream_name_.c_str());
+  }
+
+  void loop() override {
+    if (!mic_started_ && mic_ != nullptr && network::is_connected()) {
+      mic_->start();
+      mic_started_ = true;
+      ESP_LOGI("vban", "Microphone started, streaming to %s:%d",
+               target_ip_.c_str(), target_port_);
+    }
   }
 
   void send_audio(const uint8_t *data, size_t len) {
@@ -94,6 +105,7 @@ class VBANSender : public Component {
   }
 
   microphone::Microphone *mic_{nullptr};
+  bool mic_started_{false};
   int sock_{-1};
   struct sockaddr_in dest_addr_{};
   std::string target_ip_;
