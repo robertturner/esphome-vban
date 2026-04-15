@@ -69,9 +69,7 @@ audio_dac:
     id: es8311_codec
     i2c_id: bus_a
     bits_per_sample: 16bit
-    sample_rate: 16000
-    use_microphone: true
-    mic_gain: 42DB
+    sample_rate: 48000
     use_mclk: true
 
 # ─── Microphone ──────────────────────────────────────────────
@@ -93,3 +91,4 @@ vban_sender:
   target_ip: "192.168.0.255"  # broadcast du subnet (tous les receivers du LAN)
   target_port: 6980
   stream_name: ${vban_stream_name}
+  gain: 20.0                  # amplification logicielle (mic Atom Echo tres faible)

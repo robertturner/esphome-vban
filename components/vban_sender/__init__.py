@@ -13,6 +13,7 @@ VBANSender = vban_sender_ns.class_("VBANSender", cg.Component)
 CONF_TARGET_IP = "target_ip"
 CONF_TARGET_PORT = "target_port"
 CONF_STREAM_NAME = "stream_name"
+CONF_GAIN = "gain"
 
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(VBANSender),
@@ -20,6 +21,7 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Required(CONF_TARGET_IP): cv.string,
     cv.Optional(CONF_TARGET_PORT, default=6980): cv.port,
     cv.Optional(CONF_STREAM_NAME, default="AtomEcho"): cv.string,
+    cv.Optional(CONF_GAIN, default=1.0): cv.positive_float,
 }).extend(cv.COMPONENT_SCHEMA)
 
 async def to_code(config):
@@ -32,3 +34,4 @@ async def to_code(config):
     cg.add(var.set_target_ip(config[CONF_TARGET_IP]))
     cg.add(var.set_target_port(config[CONF_TARGET_PORT]))
     cg.add(var.set_stream_name(config[CONF_STREAM_NAME]))
+    cg.add(var.set_gain(config[CONF_GAIN]))

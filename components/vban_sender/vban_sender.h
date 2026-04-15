@@ -21,6 +21,7 @@ class VBANSender : public Component {
   void set_target_ip(const std::string &ip) { target_ip_ = ip; }
   void set_target_port(uint16_t port) { target_port_ = port; }
   void set_stream_name(const std::string &name) { stream_name_ = name; }
+  void set_gain(float gain) { gain_ = gain; }
 
   float get_setup_priority() const override { return setup_priority::LATE; }
 
@@ -80,10 +81,24 @@ class VBANSender : public Component {
     size_t sample_count = len / 2;
     if (sample_count == 0) return;
 
+    const int16_t *src = reinterpret_cast<const int16_t *>(data);
+    const int16_t *samples = src;
+    std::vector<int16_t> amplified;
+    if (gain_ != 1.0f) {
+      amplified.resize(sample_count);
+      for (size_t i = 0; i < sample_count; i++) {
+        int32_t v = (int32_t)(src[i] * gain_);
+        if (v > 32767) v = 32767;
+        else if (v < -32768) v = -32768;
+        amplified[i] = (int16_t) v;
+      }
+      samples = amplified.data();
+    }
+
     size_t offset = 0;
     while (offset < sample_count) {
       size_t chunk = std::min(sample_count - offset, (size_t)256);
-      send_packet_(data + offset * 2, chunk);
+      send_packet_(reinterpret_cast<const uint8_t *>(samples + offset), chunk);
       offset += chunk;
     }
   }
@@ -122,6 +137,7 @@ class VBANSender : public Component {
   std::string target_ip_;
   uint16_t target_port_{6980};
   std::string stream_name_{"AtomEcho"};
+  float gain_{1.0f};
   uint32_t frame_counter_{0};
 };
 
