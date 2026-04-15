@@ -116,26 +116,11 @@ media_player:
     id: atom_media_player
     speaker: atom_speaker
 
-# ─── VBAN Multicast → ClapTrap ───────────────────────────────
+# ─── VBAN Multicast ──────────────────────────────────────────
+# Le composant s'abonne automatiquement au micro et démarre la capture.
 vban_sender:
   id: vban
-  target_ip: "239.0.0.1"    # multicast : tous les addons reçoivent
+  microphone: atom_mic
+  target_ip: "239.0.0.1"    # multicast : tous les receivers reçoivent
   target_port: 6980
   stream_name: ${vban_stream_name}
-
-# ─── Boucle micro → VBAN (20ms chunks @ 16kHz) ───────────────
-interval:
-  - interval: 20ms
-    then:
-      - lambda: |-
-          auto &mic = id(atom_mic);
-          if (mic.is_running()) {
-            std::vector<int16_t> samples;
-            mic.read(samples, 320);
-            if (!samples.empty()) {
-              id(vban).send_audio(
-                (const uint8_t*)samples.data(),
-                samples.size() * 2
-              );
-            }
-          }

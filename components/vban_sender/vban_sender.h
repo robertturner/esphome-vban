@@ -1,5 +1,6 @@
 #pragma once
 #include "esphome.h"
+#include "esphome/components/microphone/microphone.h"
 
 #include <lwip/sockets.h>
 #include <lwip/netdb.h>
@@ -7,6 +8,7 @@
 
 #include <cstring>
 #include <algorithm>
+#include <vector>
 
 namespace esphome {
 namespace vban_sender {
@@ -15,6 +17,7 @@ static const uint8_t VBAN_SR_16000 = 8;
 
 class VBANSender : public Component {
  public:
+  void set_microphone(microphone::Microphone *mic) { mic_ = mic; }
   void set_target_ip(const std::string &ip) { target_ip_ = ip; }
   void set_target_port(uint16_t port) { target_port_ = port; }
   void set_stream_name(const std::string &name) { stream_name_ = name; }
@@ -27,7 +30,6 @@ class VBANSender : public Component {
       return;
     }
 
-    // Enable multicast TTL
     uint8_t ttl = 2;
     ::setsockopt(sock_, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl));
 
@@ -40,11 +42,17 @@ class VBANSender : public Component {
       return;
     }
 
+    if (mic_ != nullptr) {
+      mic_->add_data_callback([this](const std::vector<uint8_t> &data) {
+        this->send_audio(data.data(), data.size());
+      });
+      mic_->start();
+    }
+
     ESP_LOGI("vban", "VBAN sender ready -> %s:%d stream=%s",
              target_ip_.c_str(), target_port_, stream_name_.c_str());
   }
 
-  // Send raw PCM 16-bit mono audio data via VBAN
   void send_audio(const uint8_t *data, size_t len) {
     if (!data || len == 0 || sock_ < 0) return;
     size_t sample_count = len / 2;
@@ -85,6 +93,7 @@ class VBANSender : public Component {
              (struct sockaddr *)&dest_addr_, sizeof(dest_addr_));
   }
 
+  microphone::Microphone *mic_{nullptr};
   int sock_{-1};
   struct sockaddr_in dest_addr_{};
   std::string target_ip_;

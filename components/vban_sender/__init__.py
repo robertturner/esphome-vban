@@ -1,9 +1,10 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.const import CONF_ID
+from esphome.components import microphone
+from esphome.const import CONF_ID, CONF_MICROPHONE
 
 CODEOWNERS = ["@powange"]
-DEPENDENCIES = ["wifi", "network"]
+DEPENDENCIES = ["wifi", "network", "microphone"]
 AUTO_LOAD = []
 
 vban_sender_ns = cg.esphome_ns.namespace("vban_sender")
@@ -15,6 +16,7 @@ CONF_STREAM_NAME = "stream_name"
 
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(VBANSender),
+    cv.Required(CONF_MICROPHONE): cv.use_id(microphone.Microphone),
     cv.Required(CONF_TARGET_IP): cv.string,
     cv.Optional(CONF_TARGET_PORT, default=6980): cv.port,
     cv.Optional(CONF_STREAM_NAME, default="AtomEcho"): cv.string,
@@ -23,6 +25,10 @@ CONFIG_SCHEMA = cv.Schema({
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
+
+    mic = await cg.get_variable(config[CONF_MICROPHONE])
+    cg.add(var.set_microphone(mic))
+
     cg.add(var.set_target_ip(config[CONF_TARGET_IP]))
     cg.add(var.set_target_port(config[CONF_TARGET_PORT]))
     cg.add(var.set_stream_name(config[CONF_STREAM_NAME]))
