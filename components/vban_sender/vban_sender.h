@@ -1,11 +1,16 @@
 #pragma once
 #include "esphome.h"
-#include <WiFiUdp.h>
+
+#include <lwip/sockets.h>
+#include <lwip/netdb.h>
+#include <arpa/inet.h>
+
+#include <cstring>
+#include <algorithm>
 
 namespace esphome {
 namespace vban_sender {
 
-// VBAN sample rate index for 16000 Hz
 static const uint8_t VBAN_SR_16000 = 8;
 
 class VBANSender : public Component {
@@ -15,15 +20,33 @@ class VBANSender : public Component {
   void set_stream_name(const std::string &name) { stream_name_ = name; }
 
   void setup() override {
-    udp_.begin(0);
+    sock_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock_ < 0) {
+      ESP_LOGE("vban", "socket() failed: errno=%d", errno);
+      mark_failed();
+      return;
+    }
+
+    // Enable multicast TTL
+    uint8_t ttl = 2;
+    ::setsockopt(sock_, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl));
+
+    std::memset(&dest_addr_, 0, sizeof(dest_addr_));
+    dest_addr_.sin_family = AF_INET;
+    dest_addr_.sin_port = htons(target_port_);
+    if (::inet_aton(target_ip_.c_str(), &dest_addr_.sin_addr) == 0) {
+      ESP_LOGE("vban", "invalid target_ip: %s", target_ip_.c_str());
+      mark_failed();
+      return;
+    }
+
     ESP_LOGI("vban", "VBAN sender ready -> %s:%d stream=%s",
              target_ip_.c_str(), target_port_, stream_name_.c_str());
   }
 
   // Send raw PCM 16-bit mono audio data via VBAN
-  // data: pointer to PCM samples (int16_t), len: byte length
   void send_audio(const uint8_t *data, size_t len) {
-    if (!data || len == 0) return;
+    if (!data || len == 0 || sock_ < 0) return;
     size_t sample_count = len / 2;
     if (sample_count == 0) return;
 
@@ -37,42 +60,33 @@ class VBANSender : public Component {
 
  protected:
   void send_packet_(const uint8_t *data, size_t sample_count) {
-    uint8_t header[28] = {};
+    uint8_t packet[28 + 512];
+    uint8_t *header = packet;
 
-    // VBAN magic
     header[0] = 'V'; header[1] = 'B'; header[2] = 'A'; header[3] = 'N';
-
-    // Sample rate index (16000 Hz)
     header[4] = VBAN_SR_16000;
-
-    // Num samples - 1
     header[5] = (uint8_t)(sample_count - 1);
+    header[6] = 0;      // mono
+    header[7] = 0x01;   // PCM 16-bit
 
-    // Num channels - 1 (mono = 0)
-    header[6] = 0;
+    std::memset(&header[8], 0, 16);
+    std::strncpy((char *)&header[8], stream_name_.c_str(), 16);
 
-    // Data format: PCM 16-bit (0x01)
-    header[7] = 0x01;
-
-    // Stream name (16 bytes, null-padded)
-    strncpy((char *)&header[8], stream_name_.c_str(), 16);
-
-    // Frame counter (little-endian uint32)
     header[24] = frame_counter_ & 0xFF;
     header[25] = (frame_counter_ >> 8) & 0xFF;
     header[26] = (frame_counter_ >> 16) & 0xFF;
     header[27] = (frame_counter_ >> 24) & 0xFF;
     frame_counter_++;
 
-    IPAddress dest;
-    dest.fromString(target_ip_.c_str());
-    udp_.beginPacket(dest, target_port_);
-    udp_.write(header, 28);
-    udp_.write(data, sample_count * 2);
-    udp_.endPacket();
+    size_t payload = sample_count * 2;
+    std::memcpy(packet + 28, data, payload);
+
+    ::sendto(sock_, packet, 28 + payload, 0,
+             (struct sockaddr *)&dest_addr_, sizeof(dest_addr_));
   }
 
-  WiFiUDP udp_;
+  int sock_{-1};
+  struct sockaddr_in dest_addr_{};
   std::string target_ip_;
   uint16_t target_port_{6980};
   std::string stream_name_{"AtomEcho"};
