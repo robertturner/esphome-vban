@@ -6,29 +6,27 @@ substitutions:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
-  on_boot:
-    priority: 600
-    then:
-      - switch.turn_on: speaker_enable
 
 esp32:
-  board: esp32s3box
+  board: esp32-s3-devkitc-1
   variant: esp32s3
   framework:
     type: esp-idf
   flash_size: 8MB
-  sdkconfig_options:
-    CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: y
 
 psram:
   mode: octal
   speed: 80MHz
 
-external_components:
-  - source: github://m5stack/esphome-yaml/components
-    components: [es8311]
-  - source: github://powange/esphome-vban
-    components: [vban_sender]
+logger:
+
+api:
+  encryption:
+    key: !secret atom_bureau_api_key
+
+ota:
+  - platform: esphome
+    password: !secret atom_bureau_ota_password
 
 wifi:
   ssid: !secret wifi_ssid
@@ -39,54 +37,35 @@ wifi:
 
 captive_portal:
 
-api:
-  encryption:
-    key: !secret atom_bureau_api_key
+external_components:
+  - source: github://powange/esphome-vban
+    components: [vban_sender]
+    refresh: 0s
 
-ota:
-  - platform: esphome
-    password: !secret atom_bureau_ota_password
-
-logger:
-
-# ─── Bouton physique ─────────────────────────────────────────
-binary_sensor:
-  - platform: gpio
-    pin:
-      number: GPIO41
-      mode: INPUT_PULLUP
-      inverted: true
-    id: user_button
-    name: "Bouton ${friendly_name}"
-
-# ─── Speaker Enable ──────────────────────────────────────────
-switch:
-  - platform: gpio
-    pin: GPIO18
-    id: speaker_enable
-    name: "Speaker Enable"
-    restore_mode: ALWAYS_ON
-
-# ─── I2C (ES8311 codec) ──────────────────────────────────────
+# ─── I2C (codec ES8311) ──────────────────────────────────────
 i2c:
-  sda: GPIO45
-  scl: GPIO0
-  frequency: 50000Hz
+  - id: bus_a
+    sda: GPIO45
+    scl: GPIO0
+    frequency: 100kHz
 
-# ─── ES8311 Audio Codec ──────────────────────────────────────
-es8311:
-  id: es8311_codec
-  use_mclk: true
-  use_microphone: true
-  sample_rate: 16000
-  bits_per_sample: 16
-
-# ─── I2S Audio ───────────────────────────────────────────────
+# ─── I2S ─────────────────────────────────────────────────────
 i2s_audio:
   - id: i2s_bus
     i2s_lrclk_pin: GPIO7
     i2s_bclk_pin: GPIO8
     i2s_mclk_pin: GPIO9
+
+# ─── Codec ES8311 (natif ESPHome) ────────────────────────────
+audio_dac:
+  - platform: es8311
+    id: es8311_codec
+    i2c_id: bus_a
+    bits_per_sample: 16bit
+    sample_rate: 16000
+    use_microphone: true
+    mic_gain: 42DB
+    use_mclk: true
 
 # ─── Microphone ──────────────────────────────────────────────
 microphone:
@@ -95,29 +74,10 @@ microphone:
     i2s_audio_id: i2s_bus
     i2s_din_pin: GPIO4
     adc_type: external
-    pdm: false
-    sample_rate: 16000
-    bits_per_sample: 16bit
-    channel: left
-
-# ─── Speaker (media_player pour annonces HA) ─────────────────
-speaker:
-  - platform: i2s_audio
-    id: atom_speaker
-    i2s_audio_id: i2s_bus
-    i2s_dout_pin: GPIO48
-    dac_type: external
     sample_rate: 16000
     bits_per_sample: 16bit
 
-media_player:
-  - platform: speaker
-    name: "${friendly_name} Speaker"
-    id: atom_media_player
-    speaker: atom_speaker
-
-# ─── VBAN Multicast ──────────────────────────────────────────
-# Le composant s'abonne automatiquement au micro et démarre la capture.
+# ─── VBAN multicast sender ───────────────────────────────────
 vban_sender:
   id: vban
   microphone: atom_mic
