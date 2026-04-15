@@ -1,0 +1,135 @@
+# Exemple complet pour M5Stack Atom Echo S3R
+# VBAN multicast vers ClapTrap + media_player HA pour le speaker
+
+substitutions:
+  name: atom-bureau
+  friendly_name: "Atom Bureau"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32s3box
+  variant: esp32s3
+  framework:
+    type: esp-idf
+  flash_size: 8MB
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+external_components:
+  - source: github://m5stack/esphome-yaml/components
+    components: [es8311]
+  - source: github://powange/esphome-vban
+    components: [vban_sender]
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  use_address: 192.168.0.179   # IP fixe pour OTA
+  ap:
+    ssid: "Atom-Bureau Fallback"
+    password: !secret atom_ap_password
+
+captive_portal:
+
+api:
+  encryption:
+    key: !secret atom_bureau_api_key
+
+ota:
+  - platform: esphome
+    password: !secret atom_bureau_ota_password
+
+logger:
+
+# ─── Bouton physique ─────────────────────────────────────────
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO41
+      mode: INPUT_PULLUP
+      inverted: true
+    id: user_button
+    name: "Bouton Atom Bureau"
+
+# ─── Speaker Enable ──────────────────────────────────────────
+switch:
+  - platform: gpio
+    pin: GPIO18
+    id: speaker_enable
+    name: "Speaker Enable"
+    restore_mode: ALWAYS_ON
+
+# ─── I2C (ES8311 codec) ──────────────────────────────────────
+i2c:
+  sda: GPIO45
+  scl: GPIO0
+  frequency: 50000Hz
+
+# ─── ES8311 Audio Codec ──────────────────────────────────────
+es8311:
+  id: es8311_codec
+  use_mclk: true
+  use_microphone: true
+  sample_rate: 16000
+  bits_per_sample: 16
+
+# ─── I2S Audio ───────────────────────────────────────────────
+i2s_audio:
+  - id: i2s_bus
+    i2s_lrclk_pin: GPIO7
+    i2s_bclk_pin: GPIO8
+    i2s_mclk_pin: GPIO9
+
+# ─── Microphone ──────────────────────────────────────────────
+microphone:
+  - platform: i2s_audio
+    id: atom_mic
+    i2s_audio_id: i2s_bus
+    i2s_din_pin: GPIO4
+    adc_type: external
+    pdm: false
+    sample_rate: 16000
+    bits_per_sample: 16bit
+    channel: left
+
+# ─── Speaker (media_player pour HA) ─────────────────────────
+speaker:
+  - platform: i2s_audio
+    id: atom_speaker
+    i2s_audio_id: i2s_bus
+    i2s_dout_pin: GPIO48
+    dac_type: external
+    sample_rate: 16000
+    bits_per_sample: 16bit
+
+media_player:
+  - platform: speaker
+    name: "Atom Bureau Speaker"
+    id: atom_media_player
+    speaker: atom_speaker
+
+# ─── VBAN Multicast → ClapTrap ───────────────────────────────
+vban_sender:
+  id: vban
+  target_ip: "239.0.0.1"
+  target_port: 6980
+  stream_name: "AtomBureau"
+
+# ─── Boucle micro → VBAN (20ms = 320 samples @ 16kHz) ───────
+interval:
+  - interval: 20ms
+    then:
+      - lambda: |-
+          std::vector<int16_t> samples;
+          id(atom_mic).read(samples, 320);
+          if (!samples.empty()) {
+            id(vban).send_audio(
+              (const uint8_t*)samples.data(),
+              samples.size() * 2
+            );
+          }
