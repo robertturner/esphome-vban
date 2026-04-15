@@ -36,6 +36,9 @@ class VBANSender : public Component {
     uint8_t ttl = 2;
     ::setsockopt(sock_, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl));
 
+    int bcast = 1;
+    ::setsockopt(sock_, SOL_SOCKET, SO_BROADCAST, &bcast, sizeof(bcast));
+
     std::memset(&dest_addr_, 0, sizeof(dest_addr_));
     dest_addr_.sin_family = AF_INET;
     dest_addr_.sin_port = htons(target_port_);
