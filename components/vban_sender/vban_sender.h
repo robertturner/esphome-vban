@@ -1,7 +1,6 @@
 #pragma once
 #include "esphome.h"
 #include "esphome/components/microphone/microphone.h"
-#include "esphome/components/network/util.h"
 
 #include <lwip/sockets.h>
 #include <lwip/netdb.h>
@@ -59,12 +58,21 @@ class VBANSender : public Component {
   }
 
   void loop() override {
-    if (!mic_started_ && mic_ != nullptr && network::is_connected()) {
+    if (!mic_started_ && mic_ != nullptr) {
       mic_->start();
       mic_started_ = true;
       ESP_LOGI("vban", "Microphone started, streaming to %s:%d",
                target_ip_.c_str(), target_port_);
     }
+  }
+
+  void dump_config() override {
+    ESP_LOGCONFIG("vban", "VBAN Sender:");
+    ESP_LOGCONFIG("vban", "  Target: %s:%d", target_ip_.c_str(), target_port_);
+    ESP_LOGCONFIG("vban", "  Stream name: %s", stream_name_.c_str());
+    ESP_LOGCONFIG("vban", "  Socket: %s", sock_ >= 0 ? "OK" : "FAILED");
+    ESP_LOGCONFIG("vban", "  Mic started: %s", mic_started_ ? "YES" : "NO");
+    ESP_LOGCONFIG("vban", "  Frames sent: %u", (unsigned) frame_counter_);
   }
 
   void send_audio(const uint8_t *data, size_t len) {
