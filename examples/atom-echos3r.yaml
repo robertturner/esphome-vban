@@ -42,6 +42,13 @@ external_components:
     components: [vban_sender]
     refresh: 0s
 
+# ─── Alim codec ES8311 (GPIO18 doit être ON) ─────────────────
+switch:
+  - platform: gpio
+    pin: GPIO18
+    id: codec_enable
+    restore_mode: ALWAYS_ON
+
 # ─── I2C (codec ES8311) ──────────────────────────────────────
 i2c:
   - id: bus_a
