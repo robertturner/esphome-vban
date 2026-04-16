@@ -105,7 +105,7 @@ media_player:
       format: WAV
       sample_rate: 16000
       num_channels: 1
-    on_play:
+    on_announcement:
       - lambda: id(atom_mic).stop();
     on_idle:
       - lambda: id(atom_mic).start();
