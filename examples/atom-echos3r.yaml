@@ -105,6 +105,10 @@ media_player:
       format: WAV
       sample_rate: 16000
       num_channels: 1
+    on_play:
+      - microphone.stop: atom_mic
+    on_idle:
+      - microphone.start: atom_mic
 
 # ─── VBAN multicast sender ───────────────────────────────────
 vban_sender:
