@@ -106,9 +106,9 @@ media_player:
       sample_rate: 16000
       num_channels: 1
     on_play:
-      - microphone.stop: atom_mic
+      - lambda: id(atom_mic).stop();
     on_idle:
-      - microphone.start: atom_mic
+      - lambda: id(atom_mic).start();
 
 # ─── VBAN multicast sender ───────────────────────────────────
 vban_sender:
