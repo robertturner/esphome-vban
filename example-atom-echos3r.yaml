@@ -1,7 +1,8 @@
 substitutions:
   name: atom-bureau
   friendly_name: "Atom Bureau"
-  vban_stream_name: "AtomBureau"   # ← changer par pièce (AtomSalon, etc.)
+  vban_stream_name: "AtomBureau"      # nom du flux envoye par le micro
+  vban_tts_stream_name: "TTS1"        # nom du flux ecoute pour la lecture TTS
 
 esphome:
   name: ${name}
@@ -131,5 +132,5 @@ vban_receiver:
   speaker: atom_speaker
   microphone: atom_mic       # mis en pause pendant la lecture (half-duplex)
   listen_port: 6980
-  stream_name: "TTS1"        # doit matcher tts_vban_stream_name de l'addon
+  stream_name: ${vban_tts_stream_name}   # doit matcher tts_vban_stream_name de l'addon
   idle_timeout_ms: 1500
