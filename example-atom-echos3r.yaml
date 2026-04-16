@@ -106,9 +106,15 @@ media_player:
       sample_rate: 16000
       num_channels: 1
     on_announcement:
-      - lambda: id(atom_mic).stop();
+      - lambda: |-
+          if (id(atom_mic).is_running()) {
+            id(atom_mic).stop();
+          }
     on_idle:
-      - lambda: id(atom_mic).start();
+      - lambda: |-
+          if (id(atom_mic).is_stopped()) {
+            id(atom_mic).start();
+          }
 
 # ─── VBAN multicast sender ───────────────────────────────────
 vban_sender:
