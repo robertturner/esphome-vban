@@ -39,7 +39,7 @@ captive_portal:
 
 external_components:
   - source: github://powange/esphome-vban
-    components: [vban_sender]
+    components: [vban_sender, vban_receiver]
     refresh: 0s
 
 # ─── Alim codec ES8311 (GPIO18 doit être ON) ─────────────────
@@ -124,3 +124,12 @@ vban_sender:
   target_port: 6980
   stream_name: ${vban_stream_name}
   gain: 1.0                  # amplification logicielle (mic Atom Echo tres faible)
+
+# ─── VBAN receiver (pour TTS depuis Wyoming-STT-VBAN) ────────
+vban_receiver:
+  id: vban_in
+  speaker: atom_speaker
+  microphone: atom_mic       # mis en pause pendant la lecture (half-duplex)
+  listen_port: 6980
+  stream_name: "TTS1"        # doit matcher tts_vban_stream_name de l'addon
+  idle_timeout_ms: 1500
