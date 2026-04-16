@@ -84,6 +84,27 @@ microphone:
     sample_rate: 16000
     bits_per_sample: 16bit
 
+# ─── Speaker (sortie Home Assistant) ─────────────────────────
+speaker:
+  - platform: i2s_audio
+    id: atom_speaker
+    i2s_audio_id: i2s_bus
+    i2s_dout_pin: GPIO48
+    dac_type: external
+    sample_rate: 48000
+    bits_per_sample: 16bit
+    audio_dac: es8311_codec
+
+media_player:
+  - platform: speaker
+    name: "${friendly_name} Speaker"
+    id: atom_media_player
+    announcement_pipeline:
+      speaker: atom_speaker
+      format: FLAC
+      sample_rate: 48000
+      num_channels: 1
+
 # ─── VBAN multicast sender ───────────────────────────────────
 vban_sender:
   id: vban
