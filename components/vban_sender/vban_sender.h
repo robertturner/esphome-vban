@@ -83,16 +83,17 @@ class VBANSender : public Component {
 
     const int16_t *src = reinterpret_cast<const int16_t *>(data);
     const int16_t *samples = src;
-    std::vector<int16_t> amplified;
     if (gain_ != 1.0f) {
-      amplified.resize(sample_count);
+      if (gain_scratch_.size() < sample_count) {
+        gain_scratch_.resize(sample_count);
+      }
       for (size_t i = 0; i < sample_count; i++) {
         int32_t v = (int32_t)(src[i] * gain_);
         if (v > 32767) v = 32767;
         else if (v < -32768) v = -32768;
-        amplified[i] = (int16_t) v;
+        gain_scratch_[i] = (int16_t) v;
       }
-      samples = amplified.data();
+      samples = gain_scratch_.data();
     }
 
     size_t offset = 0;
@@ -138,6 +139,7 @@ class VBANSender : public Component {
   uint16_t target_port_{6980};
   std::string stream_name_{"AtomEcho"};
   float gain_{1.0f};
+  std::vector<int16_t> gain_scratch_;
   uint32_t frame_counter_{0};
 };
 

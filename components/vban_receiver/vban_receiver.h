@@ -9,9 +9,12 @@
 
 #include <cstring>
 #include <vector>
+#include <algorithm>
 
 namespace esphome {
 namespace vban_receiver {
+
+static const uint8_t VBAN_SR_16000 = 8;
 
 class VBANReceiver : public Component {
  public:
@@ -24,6 +27,8 @@ class VBANReceiver : public Component {
   float get_setup_priority() const override { return setup_priority::LATE; }
 
   void setup() override {
+    ring_.assign(kRingCapacity, 0);
+
     sock_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock_ < 0) {
       ESP_LOGE("vban_rx", "socket() failed: errno=%d", errno);
@@ -64,17 +69,7 @@ class VBANReceiver : public Component {
       handle_packet_(buf, n);
     }
 
-    if (playing_ && speaker_ != nullptr && speaker_->is_running()
-        && pending_head_ < pending_buffer_.size()) {
-      size_t remaining = pending_buffer_.size() - pending_head_;
-      size_t written = speaker_->play(pending_buffer_.data() + pending_head_, remaining);
-      pending_head_ += written;
-      if (pending_head_ >= pending_buffer_.size()) {
-        pending_buffer_.clear();
-        pending_buffer_.shrink_to_fit();
-        pending_head_ = 0;
-      }
-    }
+    drain_ring_to_speaker_();
 
     if (playing_ && (millis() - last_packet_ms_) > idle_timeout_ms_) {
       stop_playback_();
@@ -98,7 +93,22 @@ class VBANReceiver : public Component {
     if (sub_protocol != 0x00) return;  // only audio sub-protocol
 
     uint8_t format_bit = buf[7] & 0x07;
-    if (format_bit != 0x01) return;  // only PCM 16-bit
+    if (format_bit != 0x01) {
+      log_format_warning_("format", format_bit);
+      return;
+    }
+
+    uint8_t sr_index = buf[4] & 0x1F;
+    if (sr_index != VBAN_SR_16000) {
+      log_format_warning_("sample_rate", sr_index);
+      return;
+    }
+
+    uint8_t channels = buf[6] + 1;
+    if (channels != 1) {
+      log_format_warning_("channels", channels);
+      return;
+    }
 
     char name[17] = {};
     std::memcpy(name, buf + 8, 16);
@@ -115,22 +125,55 @@ class VBANReceiver : public Component {
       start_playback_();
     }
 
-    bool pending_empty = (pending_head_ >= pending_buffer_.size());
-    bool can_play_live = speaker_ != nullptr && speaker_->is_running() && pending_empty;
+    bool can_play_live = speaker_ != nullptr && speaker_->is_running() && ring_empty_();
     if (can_play_live) {
       size_t written = speaker_->play(pcm, pcm_len);
       if (written < pcm_len) {
-        size_t leftover = pcm_len - written;
-        if (pending_buffer_.size() - pending_head_ + leftover <= MAX_PENDING_BYTES) {
-          pending_buffer_.insert(pending_buffer_.end(),
-                                 pcm + written, pcm + pcm_len);
-        }
+        ring_write_(pcm + written, pcm_len - written);
       }
     } else {
-      if (pending_buffer_.size() - pending_head_ + pcm_len <= MAX_PENDING_BYTES) {
-        pending_buffer_.insert(pending_buffer_.end(), pcm, pcm + pcm_len);
-      }
+      ring_write_(pcm, pcm_len);
     }
+  }
+
+  void drain_ring_to_speaker_() {
+    if (!playing_ || speaker_ == nullptr || !speaker_->is_running()) return;
+    while (!ring_empty_()) {
+      size_t tail = (write_idx_ + kRingCapacity - ring_size_) % kRingCapacity;
+      size_t contig = std::min(ring_size_, kRingCapacity - tail);
+      size_t written = speaker_->play(ring_.data() + tail, contig);
+      if (written == 0) return;
+      ring_size_ -= written;
+      if (written < contig) return;  // speaker back-pressure
+    }
+  }
+
+  void ring_write_(const uint8_t *data, size_t len) {
+    size_t room = kRingCapacity - ring_size_;
+    size_t to_copy = std::min(len, room);
+    if (to_copy == 0) return;
+    size_t first = std::min(to_copy, kRingCapacity - write_idx_);
+    std::memcpy(ring_.data() + write_idx_, data, first);
+    if (to_copy > first) {
+      std::memcpy(ring_.data(), data + first, to_copy - first);
+    }
+    write_idx_ = (write_idx_ + to_copy) % kRingCapacity;
+    ring_size_ += to_copy;
+  }
+
+  bool ring_empty_() const { return ring_size_ == 0; }
+
+  void ring_reset_() {
+    ring_size_ = 0;
+    write_idx_ = 0;
+  }
+
+  void log_format_warning_(const char *field, uint8_t value) {
+    uint32_t now = millis();
+    if (now - last_format_warning_ms_ < 5000) return;
+    last_format_warning_ms_ = now;
+    ESP_LOGW("vban_rx", "Rejecting packet: unsupported %s=%u (expected mono PCM16 @ 16kHz)",
+             field, (unsigned) value);
   }
 
   void start_playback_() {
@@ -151,9 +194,7 @@ class VBANReceiver : public Component {
     if (mic_ != nullptr && mic_->is_stopped()) {
       mic_->start();
     }
-    pending_buffer_.clear();
-    pending_buffer_.shrink_to_fit();
-    pending_head_ = 0;
+    ring_reset_();
     playing_ = false;
     ESP_LOGD("vban_rx", "Stream idle, mic resumed");
   }
@@ -165,11 +206,15 @@ class VBANReceiver : public Component {
   std::string stream_name_;
   uint32_t idle_timeout_ms_{1500};
   uint32_t last_packet_ms_{0};
+  uint32_t last_format_warning_ms_{0};
   uint32_t packets_received_{0};
   bool playing_{false};
-  std::vector<uint8_t> pending_buffer_;
-  size_t pending_head_{0};
-  static constexpr size_t MAX_PENDING_BYTES = 64 * 1024;  // ~2s of 16kHz 16-bit mono
+
+  // Fixed-capacity circular buffer (~2 s at 16 kHz 16-bit mono).
+  static constexpr size_t kRingCapacity = 64 * 1024;
+  std::vector<uint8_t> ring_;
+  size_t write_idx_{0};
+  size_t ring_size_{0};
 };
 
 }  // namespace vban_receiver
