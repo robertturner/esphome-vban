@@ -15,12 +15,14 @@ CONF_TARGET_PORT = "target_port"
 CONF_STREAM_NAME = "stream_name"
 CONF_GAIN = "gain"
 
+vban_stream_name = cv.All(cv.string, cv.Length(max=16))
+
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(VBANSender),
     cv.Required(CONF_MICROPHONE): cv.use_id(microphone.Microphone),
     cv.Required(CONF_TARGET_IP): cv.string,
     cv.Optional(CONF_TARGET_PORT, default=6980): cv.port,
-    cv.Optional(CONF_STREAM_NAME, default="AtomEcho"): cv.string,
+    cv.Optional(CONF_STREAM_NAME, default="AtomEcho"): vban_stream_name,
     cv.Optional(CONF_GAIN, default=1.0): cv.float_range(min=0.0),
 }).extend(cv.COMPONENT_SCHEMA)
 

@@ -46,6 +46,8 @@ class VBANReceiver : public Component {
 
     if (::bind(sock_, (struct sockaddr *)&bind_addr, sizeof(bind_addr)) < 0) {
       ESP_LOGE("vban_rx", "bind(%d) failed: errno=%d", listen_port_, errno);
+      ::close(sock_);
+      sock_ = -1;
       mark_failed();
       return;
     }
@@ -83,6 +85,8 @@ class VBANReceiver : public Component {
     ESP_LOGCONFIG("vban_rx", "  Idle timeout: %u ms", (unsigned) idle_timeout_ms_);
     ESP_LOGCONFIG("vban_rx", "  Socket: %s", sock_ >= 0 ? "OK" : "FAILED");
     ESP_LOGCONFIG("vban_rx", "  Packets received: %u", (unsigned) packets_received_);
+    ESP_LOGCONFIG("vban_rx", "  Packets lost:     %u", (unsigned) packets_lost_);
+    ESP_LOGCONFIG("vban_rx", "  Out of order:     %u", (unsigned) packets_out_of_order_);
   }
 
  protected:
@@ -117,6 +121,23 @@ class VBANReceiver : public Component {
     const uint8_t *pcm = buf + 28;
     size_t pcm_len = n - 28;
     if (pcm_len == 0) return;
+
+    uint32_t frame = ((uint32_t) buf[24])
+                   | ((uint32_t) buf[25] << 8)
+                   | ((uint32_t) buf[26] << 16)
+                   | ((uint32_t) buf[27] << 24);
+    if (packets_received_ > 0) {
+      uint32_t expected = last_frame_counter_ + 1;
+      if (frame != expected) {
+        int32_t diff = (int32_t)(frame - expected);
+        if (diff > 0) {
+          packets_lost_ += diff;
+        } else {
+          packets_out_of_order_++;
+        }
+      }
+    }
+    last_frame_counter_ = frame;
 
     packets_received_++;
     last_packet_ms_ = millis();
@@ -208,6 +229,9 @@ class VBANReceiver : public Component {
   uint32_t last_packet_ms_{0};
   uint32_t last_format_warning_ms_{0};
   uint32_t packets_received_{0};
+  uint32_t packets_lost_{0};
+  uint32_t packets_out_of_order_{0};
+  uint32_t last_frame_counter_{0};
   bool playing_{false};
 
   // Fixed-capacity circular buffer (~2 s at 16 kHz 16-bit mono).

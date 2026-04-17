@@ -8,6 +8,7 @@
 
 #include <cstring>
 #include <algorithm>
+#include <atomic>
 #include <vector>
 
 namespace esphome {
@@ -44,6 +45,8 @@ class VBANSender : public Component {
     dest_addr_.sin_port = htons(target_port_);
     if (::inet_aton(target_ip_.c_str(), &dest_addr_.sin_addr) == 0) {
       ESP_LOGE("vban", "invalid target_ip: %s", target_ip_.c_str());
+      ::close(sock_);
+      sock_ = -1;
       mark_failed();
       return;
     }
@@ -73,7 +76,7 @@ class VBANSender : public Component {
     ESP_LOGCONFIG("vban", "  Stream name: %s", stream_name_.c_str());
     ESP_LOGCONFIG("vban", "  Socket: %s", sock_ >= 0 ? "OK" : "FAILED");
     ESP_LOGCONFIG("vban", "  Mic started: %s", mic_started_ ? "YES" : "NO");
-    ESP_LOGCONFIG("vban", "  Frames sent: %u", (unsigned) frame_counter_);
+    ESP_LOGCONFIG("vban", "  Frames sent: %u", (unsigned) frame_counter_.load());
   }
 
   void send_audio(const uint8_t *data, size_t len) {
@@ -118,11 +121,11 @@ class VBANSender : public Component {
     std::memset(&header[8], 0, 16);
     std::strncpy((char *)&header[8], stream_name_.c_str(), 16);
 
-    header[24] = frame_counter_ & 0xFF;
-    header[25] = (frame_counter_ >> 8) & 0xFF;
-    header[26] = (frame_counter_ >> 16) & 0xFF;
-    header[27] = (frame_counter_ >> 24) & 0xFF;
-    frame_counter_++;
+    uint32_t fc = frame_counter_.fetch_add(1, std::memory_order_relaxed);
+    header[24] = fc & 0xFF;
+    header[25] = (fc >> 8) & 0xFF;
+    header[26] = (fc >> 16) & 0xFF;
+    header[27] = (fc >> 24) & 0xFF;
 
     size_t payload = sample_count * 2;
     std::memcpy(packet + 28, data, payload);
@@ -140,7 +143,7 @@ class VBANSender : public Component {
   std::string stream_name_{"AtomEcho"};
   float gain_{1.0f};
   std::vector<int16_t> gain_scratch_;
-  uint32_t frame_counter_{0};
+  std::atomic<uint32_t> frame_counter_{0};
 };
 
 }  // namespace vban_sender

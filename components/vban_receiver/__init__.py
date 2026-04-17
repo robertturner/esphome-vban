@@ -20,7 +20,7 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Required(CONF_SPEAKER): cv.use_id(speaker.Speaker),
     cv.Optional(CONF_MICROPHONE): cv.use_id(microphone.Microphone),
     cv.Optional(CONF_LISTEN_PORT, default=6980): cv.port,
-    cv.Required(CONF_STREAM_NAME): cv.string,
+    cv.Required(CONF_STREAM_NAME): cv.All(cv.string, cv.Length(max=16)),
     cv.Optional(CONF_IDLE_TIMEOUT_MS, default=1500): cv.positive_int,
 }).extend(cv.COMPONENT_SCHEMA)
 
