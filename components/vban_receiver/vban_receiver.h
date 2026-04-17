@@ -8,6 +8,7 @@
 #include <fcntl.h>
 
 #include <cstring>
+#include <vector>
 
 namespace esphome {
 namespace vban_receiver {
@@ -63,6 +64,12 @@ class VBANReceiver : public Component {
       handle_packet_(buf, n);
     }
 
+    if (playing_ && speaker_ != nullptr && speaker_->is_running() && !pending_buffer_.empty()) {
+      speaker_->play(pending_buffer_.data(), pending_buffer_.size());
+      pending_buffer_.clear();
+      pending_buffer_.shrink_to_fit();
+    }
+
     if (playing_ && (millis() - last_packet_ms_) > idle_timeout_ms_) {
       stop_playback_();
     }
@@ -104,6 +111,10 @@ class VBANReceiver : public Component {
 
     if (speaker_ != nullptr && speaker_->is_running()) {
       speaker_->play(pcm, pcm_len);
+    } else {
+      if (pending_buffer_.size() + pcm_len <= MAX_PENDING_BYTES) {
+        pending_buffer_.insert(pending_buffer_.end(), pcm, pcm + pcm_len);
+      }
     }
   }
 
@@ -125,6 +136,8 @@ class VBANReceiver : public Component {
     if (mic_ != nullptr && mic_->is_stopped()) {
       mic_->start();
     }
+    pending_buffer_.clear();
+    pending_buffer_.shrink_to_fit();
     playing_ = false;
     ESP_LOGD("vban_rx", "Stream idle, mic resumed");
   }
@@ -138,6 +151,8 @@ class VBANReceiver : public Component {
   uint32_t last_packet_ms_{0};
   uint32_t packets_received_{0};
   bool playing_{false};
+  std::vector<uint8_t> pending_buffer_;
+  static constexpr size_t MAX_PENDING_BYTES = 64 * 1024;  // ~2s of 16kHz 16-bit mono
 };
 
 }  // namespace vban_receiver
