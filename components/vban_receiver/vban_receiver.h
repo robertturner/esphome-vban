@@ -65,9 +65,11 @@ class VBANReceiver : public Component {
     }
 
     if (playing_ && speaker_ != nullptr && speaker_->is_running() && !pending_buffer_.empty()) {
-      speaker_->play(pending_buffer_.data(), pending_buffer_.size());
-      pending_buffer_.clear();
-      pending_buffer_.shrink_to_fit();
+      size_t written = speaker_->play(pending_buffer_.data(), pending_buffer_.size());
+      if (written > 0) {
+        pending_buffer_.erase(pending_buffer_.begin(),
+                              pending_buffer_.begin() + written);
+      }
     }
 
     if (playing_ && (millis() - last_packet_ms_) > idle_timeout_ms_) {
@@ -109,8 +111,16 @@ class VBANReceiver : public Component {
       start_playback_();
     }
 
-    if (speaker_ != nullptr && speaker_->is_running()) {
-      speaker_->play(pcm, pcm_len);
+    bool can_play_live = speaker_ != nullptr && speaker_->is_running() && pending_buffer_.empty();
+    if (can_play_live) {
+      size_t written = speaker_->play(pcm, pcm_len);
+      if (written < pcm_len) {
+        size_t leftover = pcm_len - written;
+        if (pending_buffer_.size() + leftover <= MAX_PENDING_BYTES) {
+          pending_buffer_.insert(pending_buffer_.end(),
+                                 pcm + written, pcm + pcm_len);
+        }
+      }
     } else {
       if (pending_buffer_.size() + pcm_len <= MAX_PENDING_BYTES) {
         pending_buffer_.insert(pending_buffer_.end(), pcm, pcm + pcm_len);
