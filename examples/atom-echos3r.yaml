@@ -2,7 +2,7 @@ substitutions:
   name: atom-bureau
   friendly_name: "Atom Bureau"
   vban_stream_name: "AtomBureau"      # nom du flux envoye par le micro
-  vban_tts_stream_name: "AtomBureauSpeaker"        # nom du flux ecoute pour la lecture TTS
+  vban_tts_stream_name: "AtomBureauSpk"        # nom du flux ecoute pour la lecture TTS (16 chars max)
 
 esphome:
   name: ${name}
