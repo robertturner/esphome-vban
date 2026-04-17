@@ -64,11 +64,15 @@ class VBANReceiver : public Component {
       handle_packet_(buf, n);
     }
 
-    if (playing_ && speaker_ != nullptr && speaker_->is_running() && !pending_buffer_.empty()) {
-      size_t written = speaker_->play(pending_buffer_.data(), pending_buffer_.size());
-      if (written > 0) {
-        pending_buffer_.erase(pending_buffer_.begin(),
-                              pending_buffer_.begin() + written);
+    if (playing_ && speaker_ != nullptr && speaker_->is_running()
+        && pending_head_ < pending_buffer_.size()) {
+      size_t remaining = pending_buffer_.size() - pending_head_;
+      size_t written = speaker_->play(pending_buffer_.data() + pending_head_, remaining);
+      pending_head_ += written;
+      if (pending_head_ >= pending_buffer_.size()) {
+        pending_buffer_.clear();
+        pending_buffer_.shrink_to_fit();
+        pending_head_ = 0;
       }
     }
 
@@ -111,18 +115,19 @@ class VBANReceiver : public Component {
       start_playback_();
     }
 
-    bool can_play_live = speaker_ != nullptr && speaker_->is_running() && pending_buffer_.empty();
+    bool pending_empty = (pending_head_ >= pending_buffer_.size());
+    bool can_play_live = speaker_ != nullptr && speaker_->is_running() && pending_empty;
     if (can_play_live) {
       size_t written = speaker_->play(pcm, pcm_len);
       if (written < pcm_len) {
         size_t leftover = pcm_len - written;
-        if (pending_buffer_.size() + leftover <= MAX_PENDING_BYTES) {
+        if (pending_buffer_.size() - pending_head_ + leftover <= MAX_PENDING_BYTES) {
           pending_buffer_.insert(pending_buffer_.end(),
                                  pcm + written, pcm + pcm_len);
         }
       }
     } else {
-      if (pending_buffer_.size() + pcm_len <= MAX_PENDING_BYTES) {
+      if (pending_buffer_.size() - pending_head_ + pcm_len <= MAX_PENDING_BYTES) {
         pending_buffer_.insert(pending_buffer_.end(), pcm, pcm + pcm_len);
       }
     }
@@ -148,6 +153,7 @@ class VBANReceiver : public Component {
     }
     pending_buffer_.clear();
     pending_buffer_.shrink_to_fit();
+    pending_head_ = 0;
     playing_ = false;
     ESP_LOGD("vban_rx", "Stream idle, mic resumed");
   }
@@ -162,6 +168,7 @@ class VBANReceiver : public Component {
   uint32_t packets_received_{0};
   bool playing_{false};
   std::vector<uint8_t> pending_buffer_;
+  size_t pending_head_{0};
   static constexpr size_t MAX_PENDING_BYTES = 64 * 1024;  // ~2s of 16kHz 16-bit mono
 };
 
