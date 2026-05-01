@@ -71,8 +71,13 @@ class VBANReceiver : public Component {
 	  {
 		  raw_packets_received_++;
 	  }
-      if (n < 28) 
+      if (n < 28) {
+		  if (n < 0)
+			log_format_warning_("n neg", (unsigned)-n);
+		  else
+			log_format_warning_("n", (unsigned)n);
 		  break;
+	  }
       handle_packet_(buf, n);
     }
 
@@ -211,7 +216,8 @@ class VBANReceiver : public Component {
     if (now - last_format_warning_ms_ < 5000) 
 		return;
     last_format_warning_ms_ = now;
-    ESP_LOGW("vban_rx", "Rejecting packet: unsupported %s=%u (expected mono PCM16 @ 16kHz)",
+	//ESP_LOGD
+    ESP_LOGCONFIG("vban_rx", "Rejecting packet: unsupported %s=%u (expected mono PCM16 @ 16kHz)",
              field, (unsigned) value);
   }
 
