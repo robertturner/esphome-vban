@@ -22,7 +22,7 @@ class VBANReceiver : public Component {
   void set_stream_name(const std::string &name) { stream_name_ = name; }
   void set_idle_timeout_ms(uint32_t ms) { idle_timeout_ms_ = ms; }
 
-  //float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
+  float get_setup_priority() const override { return setup_priority::HARDWARE; }
 
   void setup() override {
     ring_.assign(kRingCapacity, 0);
