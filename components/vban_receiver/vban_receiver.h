@@ -67,7 +67,12 @@ class VBANReceiver : public Component {
     for (int i = 0; i < 8; i++) {
       int n = ::recvfrom(sock_, buf, sizeof(buf), 0,
                         (struct sockaddr *)&from, &fromlen);
-      if (n < 28) break;
+	  if (n >= 0)
+	  {
+		  raw_packets_received_++;
+	  }
+      if (n < 28) 
+		  break;
       handle_packet_(buf, n);
     }
 
@@ -84,6 +89,7 @@ class VBANReceiver : public Component {
     ESP_LOGCONFIG("vban_rx", "  Stream name: %s", stream_name_.c_str());
     ESP_LOGCONFIG("vban_rx", "  Idle timeout: %u ms", (unsigned) idle_timeout_ms_);
     ESP_LOGCONFIG("vban_rx", "  Socket: %s", sock_ >= 0 ? "OK" : "FAILED");
+    ESP_LOGCONFIG("vban_rx", "  Raw packets received: %u", (unsigned) raw_packets_received_);
     ESP_LOGCONFIG("vban_rx", "  Packets received: %u", (unsigned) packets_received_);
     ESP_LOGCONFIG("vban_rx", "  Packets lost:     %u", (unsigned) packets_lost_);
     ESP_LOGCONFIG("vban_rx", "  Out of order:     %u", (unsigned) packets_out_of_order_);
@@ -227,6 +233,7 @@ class VBANReceiver : public Component {
   uint32_t idle_timeout_ms_{1500};
   uint32_t last_packet_ms_{0};
   uint32_t last_format_warning_ms_{0};
+  uint32_t raw_packets_received_{0};
   uint32_t packets_received_{0};
   uint32_t packets_lost_{0};
   uint32_t packets_out_of_order_{0};
