@@ -58,14 +58,15 @@ class VBANReceiver : public Component {
   }
 
   void loop() override {
+	const unsigned bufLen = 2048;
     static uint8_t *buf = 0;
 	if (!buf)
-		buf = (uint8_t *)malloc(2048);
+		buf = (uint8_t *)malloc(bufLen);
     struct sockaddr_in from;
     socklen_t fromlen = sizeof(from);
 
     for (int i = 0; i < 8; i++) {
-      int n = ::recvfrom(sock_, buf, sizeof(buf), 0,
+      int n = ::recvfrom(sock_, buf, bufLen, 0,
                         (struct sockaddr *)&from, &fromlen);
 	  if (n >= 0)
 	  {
@@ -213,7 +214,7 @@ class VBANReceiver : public Component {
 
   void log_format_warning_(const char *field, uint8_t value) {
     uint32_t now = millis();
-    if (now - last_format_warning_ms_ < 5000) 
+    if (now - last_format_warning_ms_ < 1000) 
 		return;
     last_format_warning_ms_ = now;
 	//ESP_LOGD
