@@ -1,7 +1,6 @@
 #pragma once
 #include "esphome.h"
 #include "esphome/components/speaker/speaker.h"
-#include "esphome/components/microphone/microphone.h"
 
 #include <lwip/sockets.h>
 #include <arpa/inet.h>
@@ -19,7 +18,6 @@ static const uint8_t VBAN_SR_16000 = 8;
 class VBANReceiver : public Component {
  public:
   void set_speaker(speaker::Speaker *spk) { speaker_ = spk; }
-  void set_microphone(microphone::Microphone *mic) { mic_ = mic; }
   void set_listen_port(uint16_t port) { listen_port_ = port; }
   void set_stream_name(const std::string &name) { stream_name_ = name; }
   void set_idle_timeout_ms(uint32_t ms) { idle_timeout_ms_ = ms; }
@@ -206,9 +204,6 @@ class VBANReceiver : public Component {
   }
 
   void start_playback_() {
-    if (mic_ != nullptr && mic_->is_running()) {
-      mic_->stop();
-    }
     if (speaker_ != nullptr && !speaker_->is_running()) {
       speaker_->start();
     }
@@ -220,16 +215,12 @@ class VBANReceiver : public Component {
     if (speaker_ != nullptr && speaker_->is_running()) {
       speaker_->stop();
     }
-    if (mic_ != nullptr && mic_->is_stopped()) {
-      mic_->start();
-    }
     ring_reset_();
     playing_ = false;
     ESP_LOGD("vban_rx", "Stream idle, mic resumed");
   }
 
   speaker::Speaker *speaker_{nullptr};
-  microphone::Microphone *mic_{nullptr};
   int sock_{-1};
   uint16_t listen_port_{6980};
   std::string stream_name_;
