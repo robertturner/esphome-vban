@@ -60,7 +60,9 @@ class VBANReceiver : public Component {
   }
 
   void loop() override {
-    uint8_t buf[2048];
+    static uint8_t *buf = 0;
+	if (!buf)
+		buf = (uint8_t *)malloc(2048);
     struct sockaddr_in from;
     socklen_t fromlen = sizeof(from);
 
@@ -91,10 +93,12 @@ class VBANReceiver : public Component {
 
  protected:
   void handle_packet_(const uint8_t *buf, int n) {
-    if (buf[0] != 'V' || buf[1] != 'B' || buf[2] != 'A' || buf[3] != 'N') return;
+    if (buf[0] != 'V' || buf[1] != 'B' || buf[2] != 'A' || buf[3] != 'N') 
+		return;
 
     uint8_t sub_protocol = buf[4] & 0xE0;
-    if (sub_protocol != 0x00) return;  // only audio sub-protocol
+    if (sub_protocol != 0x00) 
+		return;  // only audio sub-protocol
 
     uint8_t format_bit = buf[7] & 0x07;
     if (format_bit != 0x01) {
@@ -114,13 +118,13 @@ class VBANReceiver : public Component {
       return;
     }
 
-    char name[17] = {};
-    std::memcpy(name, buf + 8, 16);
-    if (std::strncmp(name, stream_name_.c_str(), 16) != 0) return;
+    if (std::strncmp((char*)(buf + 8), stream_name_.c_str(), 16) != 0) 
+		return;
 
     const uint8_t *pcm = buf + 28;
     size_t pcm_len = n - 28;
-    if (pcm_len == 0) return;
+    if (pcm_len == 0) 
+		return;
 
     uint32_t frame = ((uint32_t) buf[24])
                    | ((uint32_t) buf[25] << 8)
@@ -163,16 +167,19 @@ class VBANReceiver : public Component {
       size_t tail = (write_idx_ + kRingCapacity - ring_size_) % kRingCapacity;
       size_t contig = std::min(ring_size_, kRingCapacity - tail);
       size_t written = speaker_->play(ring_.data() + tail, contig);
-      if (written == 0) return;
+      if (written == 0) 
+		  return;
       ring_size_ -= written;
-      if (written < contig) return;  // speaker back-pressure
+      if (written < contig) 
+		  return;  // speaker back-pressure
     }
   }
 
   void ring_write_(const uint8_t *data, size_t len) {
     size_t room = kRingCapacity - ring_size_;
     size_t to_copy = std::min(len, room);
-    if (to_copy == 0) return;
+    if (to_copy == 0) 
+		return;
     size_t first = std::min(to_copy, kRingCapacity - write_idx_);
     std::memcpy(ring_.data() + write_idx_, data, first);
     if (to_copy > first) {
@@ -191,7 +198,8 @@ class VBANReceiver : public Component {
 
   void log_format_warning_(const char *field, uint8_t value) {
     uint32_t now = millis();
-    if (now - last_format_warning_ms_ < 5000) return;
+    if (now - last_format_warning_ms_ < 5000) 
+		return;
     last_format_warning_ms_ = now;
     ESP_LOGW("vban_rx", "Rejecting packet: unsupported %s=%u (expected mono PCM16 @ 16kHz)",
              field, (unsigned) value);
@@ -234,8 +242,8 @@ class VBANReceiver : public Component {
   uint32_t last_frame_counter_{0};
   bool playing_{false};
 
-  // Fixed-capacity circular buffer (~2 s at 16 kHz 16-bit mono).
-  static constexpr size_t kRingCapacity = 64 * 1024;
+  // Fixed-capacity circular buffer (~1 s at 16 kHz 16-bit mono).
+  static constexpr size_t kRingCapacity = 32 * 1024;
   std::vector<uint8_t> ring_;
   size_t write_idx_{0};
   size_t ring_size_{0};

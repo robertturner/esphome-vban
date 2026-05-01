@@ -4,7 +4,7 @@ from esphome.components import speaker, microphone
 from esphome.const import CONF_ID
 
 CODEOWNERS = ["@powange"]
-DEPENDENCIES = ["wifi", "network", "speaker"]
+DEPENDENCIES = ["network", "speaker"]
 
 vban_receiver_ns = cg.esphome_ns.namespace("vban_receiver")
 VBANReceiver = vban_receiver_ns.class_("VBANReceiver", cg.Component)
