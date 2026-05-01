@@ -97,8 +97,10 @@ class VBANReceiver : public Component {
 
  protected:
   void handle_packet_(const uint8_t *buf, int n) {
-    if (buf[0] != 'V' || buf[1] != 'B' || buf[2] != 'A' || buf[3] != 'N') 
+    if (buf[0] != 'V' || buf[1] != 'B' || buf[2] != 'A' || buf[3] != 'N') {
+		log_format_warning_("header", *((uint32_t*)buf));
 		return;
+	}
 
     uint8_t sub_protocol = buf[4] & 0xE0;
     if (sub_protocol != 0x00) 
@@ -122,13 +124,17 @@ class VBANReceiver : public Component {
       return;
     }
 
-    if (std::strncmp((char*)(buf + 8), stream_name_.c_str(), 16) != 0) 
+    if (std::strncmp((char*)(buf + 8), stream_name_.c_str(), 16) != 0) {
+		log_format_warning_("stream", 0);
 		return;
+	}
 
     const uint8_t *pcm = buf + 28;
     size_t pcm_len = n - 28;
-    if (pcm_len == 0) 
+    if (pcm_len == 0) {
+		log_format_warning_("pcm_len", 0);
 		return;
+	}
 
     uint32_t frame = ((uint32_t) buf[24])
                    | ((uint32_t) buf[25] << 8)
