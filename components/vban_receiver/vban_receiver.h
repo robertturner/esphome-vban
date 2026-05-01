@@ -73,9 +73,7 @@ class VBANReceiver : public Component {
 		  raw_packets_received_++;
 	  }
       if (n < 28) {
-		  if (n < 0)
-			log_format_warning_("n neg", (unsigned)-n);
-		  else
+		  if (n >= 0)
 			log_format_warning_("n", (unsigned)n);
 		  break;
 	  }
