@@ -118,7 +118,7 @@ class VBANReceiver : public Component {
     }
 
     uint8_t sr_index = buf[4] & 0x1F;
-    if (sr_index != VBAN_SR_48000) {
+    if (sr_index != VBAN_SR_16000) {
       log_format_warning_("sample_rate", sr_index);
       return;
     }
