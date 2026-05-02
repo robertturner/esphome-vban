@@ -124,7 +124,7 @@ class VBANReceiver : public Component {
     }
 
     uint8_t channels = buf[6] + 1;
-    if (channels != 1) {
+    if (channels != 2) {
       log_format_warning_("channels", channels);
       return;
     }
