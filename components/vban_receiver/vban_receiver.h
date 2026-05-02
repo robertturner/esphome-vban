@@ -38,8 +38,8 @@ protected:
     i2s_chan_handle_t _tx_handle;
 };
 
-static constexpr uint32_t I2S_DMA_BUF_COUNT_DEFAULT  8
-static constexpr uint32_t I2S_DMA_BUF_SIZE_DEFAULT   256
+static constexpr uint32_t I2S_DMA_BUF_COUNT_DEFAULT  = 8;
+static constexpr uint32_t I2S_DMA_BUF_SIZE_DEFAULT   = 256;
 
 class AudioOutputI2S : public AudioOutput
 {
@@ -350,6 +350,7 @@ class VBANReceiver : public Component {
 #else
     void ring_write_(const uint8_t *pcmData, size_t len) {	 
 		unsigned vbanNbr = len / 2;
+		const int16_t *pcmSamples = (const uint16_t *)pcmData;
 		if (audioOut && vbanNbr > 0 && (vbanNbr & 1) == 0)
         {
             //static uint32_t lvl;
@@ -358,10 +359,10 @@ class VBANReceiver : public Component {
 
             for (; vbanNbr > 0; )
             {
-                if (audioOut->consumeSample(pcmData))
+                if (audioOut->consumeSample(pcmSamples))
                 {
                     vbanNbr -= 2;
-                    pcmData += 2;
+                    pcmSamples += 2;
                 }
                 else
                 {
@@ -399,7 +400,9 @@ class VBANReceiver : public Component {
       speaker_->start();
     }
 #else
-	std::unique_ptr<AudioOutputI2S> i2s = std::make_unique<AudioOutputI2S>(GPIO_NUM_5, -1, GPIO_NUM_33, GPIO_NUM_17);
+	AudioOutputI2S *i2sPtr = new AudioOutputI2S(GPIO_NUM_5, -1, GPIO_NUM_33, GPIO_NUM_17);
+	std::unique_ptr<AudioOutputI2S> i2s = std::unique_ptr<AudioOutputI2S>(i2sPtr);
+	//std::unique_ptr<AudioOutputI2S> i2s = std::make_unique<AudioOutputI2S>(GPIO_NUM_5, -1, GPIO_NUM_33, GPIO_NUM_17);
 	i2s->setBuffers(16, 1024);
 	audioOut = std::move(i2s);
 	audioOut->setRate(16000);
