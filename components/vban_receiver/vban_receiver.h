@@ -251,7 +251,7 @@ class VBANReceiver : public Component {
  
   static void socketTask_(void *pvParams)
   {
-	VBANReceiver *inst = (VBANReceiver*)pvParams;
+	VBANReceiver *inst = static_cast<VBANReceiver*>(pvParams);
 	inst->socketTask();
   }
   void socketTask()
