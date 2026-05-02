@@ -202,7 +202,7 @@ class VBANReceiver : public Component {
 	struct timeval timeout;
 	timeout.tv_sec = 0;
 	timeout.tv_usec = 5000;
-	::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+	::setsockopt(sock_, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 #endif	
 
 	xTaskCreate(socketTask_, "vban", 3000, this, ESP_TASK_PRIO_MAX - 1, 0);
