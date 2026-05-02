@@ -6,6 +6,7 @@
 #include <lwip/sockets.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include "FreeRTOS.h"
 
 #include <functional>
 #include <stdint.h>
@@ -194,14 +195,24 @@ class VBANReceiver : public Component {
       return;
     }
 
+#if 0
     int flags = ::fcntl(sock_, F_GETFL, 0);
     ::fcntl(sock_, F_SETFL, flags | O_NONBLOCK);
+#else
+	struct timeval timeout;
+	timeout.tv_sec = 0;
+	timeout.tv_usec = 5000;
+	::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+#endif	
+
+	xTaskCreate(socketTask_, "vban", 3000, this, ESP_TASK_PRIO_MAX - 1, 0);
 
     ESP_LOGI("vban_rx", "Listening on UDP %d for VBAN stream '%s'",
              listen_port_, stream_name_.c_str());
   }
 
   void loop() override {
+#if 0	  
     struct sockaddr_in from;
     socklen_t fromlen = sizeof(from);
 
@@ -216,7 +227,7 @@ class VBANReceiver : public Component {
 		break;
       
     }
-
+#endif
     //drain_ring_to_speaker_();
 
     if (playing_ && (millis() - last_packet_ms_) > idle_timeout_ms_) {
@@ -237,6 +248,38 @@ class VBANReceiver : public Component {
   }
 
  protected:
+ 
+  static void socketTask_(void *pvParams)
+  {
+	VBANReceiver *inst = (VBANReceiver*)pvParams;
+	inst->socketTask();
+  }
+  void socketTask()
+  {	  
+	struct sockaddr_in from;
+    socklen_t fromlen = sizeof(from);
+
+    for (int i = 0; i < 16; i++) {
+      int n = ::recvfrom(sock_, sockBuff_.data(), sockBuff_.size(), 0,
+                        (struct sockaddr *)&from, &fromlen);
+						
+	  if (n >= 0) {
+		raw_packets_received_++;
+		handle_packet_(sockBuff_.data(), n);
+	  }
+	  else {
+	    if (errno == EINPROGRESS || errno == EAGAIN || errno == EWOULDBLOCK) {
+          // not an error
+          vTaskDelay(1);
+        }
+		else
+			ESP_LOGD("vban_rx", "Socket error, errno: %d", errno);
+		break;
+      }
+    }
+	  
+  }
+ 
   void handle_packet_(const uint8_t *buf, int n) {
 	if (n < 24)
 		return;
