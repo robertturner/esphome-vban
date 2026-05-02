@@ -257,7 +257,7 @@ class VBANReceiver : public Component {
     }
 
     uint8_t sr_index = buf[4] & 0x1F;
-    if (sr_index != VBAN_SR_16000) {
+    if (sr_index != VBAN_SR_48000) {
       log_format_warning_("sample_rate", sr_index);
       return;
     }
@@ -403,7 +403,7 @@ class VBANReceiver : public Component {
 	//std::unique_ptr<AudioOutputI2S> i2s = std::make_unique<AudioOutputI2S>(GPIO_NUM_5, -1, GPIO_NUM_33, GPIO_NUM_17);
 	i2s->setBuffers(16, 1024);
 	audioOut = std::move(i2s);
-	audioOut->setRate(16000);
+	audioOut->setRate(48000);
 	audioOut->begin();
 #endif
     playing_ = true;
