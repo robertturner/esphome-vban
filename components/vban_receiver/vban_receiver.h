@@ -46,7 +46,7 @@ class AudioOutputI2S : public AudioOutput
 public:
 
 
-    AudioOutputI2S(int dout_pin, int mclk_pin, int bclk_pin, int ws_pin) : hertz(44100),
+    AudioOutputI2S(int dout_pin, int mclk_pin, int bclk_pin, int ws_pin) : hertz(48000),
                                                                                         i2sOn(false),
                                                                                         dout_pin(dout_pin),
                                                                                         mclk_pin(mclk_pin),
@@ -65,8 +65,6 @@ public:
 	}
 
     bool setRate(int hz) override {
-		if (hz < 32000)
-			return false;
 		if (hz == hertz)
 			return true;
 		hertz = hz;
