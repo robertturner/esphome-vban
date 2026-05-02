@@ -499,24 +499,20 @@ class VBANReceiver : public Component {
                         (struct sockaddr *)&from, &fromlen);
 						
 	  if (n >= 0) {
-		raw_packets_received_++;
-		handle_packet_(sockBuff_.data(), n);
-		
+		raw_packets_received_++;		
 		VBanPacket packet(sockBuff_.data(), n);
-		if (packet.checkValid()) {
+		if (packet.checkValid())
 			handle_packet_(packet);
-		}
-		else {
-			log_format_warning_("header", 0));
-		}
+		else
+			log_format_warning_("header", 0);
 	  }
 	  else {
 	    if (errno == EINPROGRESS || errno == EAGAIN || errno == EWOULDBLOCK) {
           // not an error
         }
-		else
+		else {
 		  ESP_LOGD("vban_rx", "Socket error, errno: %d", errno);
-	  
+		}
 		if (playing() && (millis() - last_packet_ms_) > idle_timeout_ms_) {
 		  stop_playback_();
 		}
@@ -529,9 +525,9 @@ class VBANReceiver : public Component {
  
   void handle_packet_(const VBanPacket &packet) {
 	  
-	if (packet.getProtocol() != VBAN_PROTOCOL_AUDIO)
+	if (packet.getProtocol() != VBanPacket::VBAN_PROTOCOL_AUDIO)
 	  return;
-	if (packet.getBitrate() != VBAN_BITFMT_16_INT) {
+	if (packet.getBitrate() != VBanPacket::VBAN_BITFMT_16_INT) {
 	  log_format_warning_("format", (unsigned)packet.getBitrate());
 	  return;
 	}
@@ -545,9 +541,12 @@ class VBANReceiver : public Component {
 	}
 
 	unsigned sr = packet.getSampleRate();
-
-    const uint8_t *pcm = buf + 28;
-    size_t pcm_len = n - 28;
+	if (audioOut) {
+		if (sr != audioOut->getRate())
+			audioOut->setRate(sr);
+	}
+	else
+		start_playback_(sr);
 
     uint32_t frame = packet.getFrameNum();
     if (packets_received_ > 0) {
@@ -566,12 +565,8 @@ class VBANReceiver : public Component {
     packets_received_++;
     last_packet_ms_ = millis();
 
-    if (!playing()) {
-      start_playback_(48000);
-    }
-
 #if 1
-	unsigned vbanNbr;
+	int vbanNbr;
 	const int16_t *pcmSamples = packet.getSamplesData(&vbanNbr);
 	if ((vbanNbr & 1) == 0) {
 		for (; vbanNbr > 0; ) {
