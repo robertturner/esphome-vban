@@ -56,7 +56,7 @@ public:
     virtual ~AudioOutputI2S() { stop(); }
 
     //bool setPinout(int dout_pin, int mclk_pin, int bclk_pin, int ws_pin);
-    bool setBuffers(int dmaBuffers = I2S_DMA_BUF_COUNT_DEFAULT, int dmaBufferBytes = I2S_DMA_BUF_SIZE_DEFAULT) {
+    bool setBuffers(int dmaBufferCount = I2S_DMA_BUF_COUNT_DEFAULT, int dmaBufferBytes = I2S_DMA_BUF_SIZE_DEFAULT) {
 		if (i2sOn || (dmaBufferCount < 3) || (dmaBufferBytes & 3))
 			return false;
 		_buffers = dmaBufferCount;
@@ -350,7 +350,7 @@ class VBANReceiver : public Component {
 #else
     void ring_write_(const uint8_t *pcmData, size_t len) {	 
 		unsigned vbanNbr = len / 2;
-		const int16_t *pcmSamples = (const uint16_t *)pcmData;
+		const int16_t *pcmSamples = (const int16_t *)pcmData;
 		if (audioOut && vbanNbr > 0 && (vbanNbr & 1) == 0)
         {
             //static uint32_t lvl;
