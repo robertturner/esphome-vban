@@ -14,6 +14,7 @@ namespace esphome {
 namespace vban_receiver {
 
 static const uint8_t VBAN_SR_16000 = 8;
+static const uint8_t VBAN_SR_48000 = 3;
 
 class VBANReceiver : public Component {
  public:
@@ -111,19 +112,19 @@ class VBANReceiver : public Component {
 		return;  // only audio sub-protocol
 
     uint8_t format_bit = buf[7] & 0x07;
-    if (format_bit != 0x01) {
+    if (format_bit != 0x01) { // 16-bit
       log_format_warning_("format", format_bit);
       return;
     }
 
     uint8_t sr_index = buf[4] & 0x1F;
-    if (sr_index != VBAN_SR_16000) {
+    if (sr_index != VBAN_SR_48000) {
       log_format_warning_("sample_rate", sr_index);
       return;
     }
 
     uint8_t channels = buf[6] + 1;
-    if (channels != 1) {
+    if (channels != 2) {
       log_format_warning_("channels", channels);
       return;
     }
@@ -234,7 +235,7 @@ class VBANReceiver : public Component {
     }
     ring_reset_();
     playing_ = false;
-    ESP_LOGD("vban_rx", "Stream idle, mic resumed");
+    ESP_LOGD("vban_rx", "Stream idle");
   }
 
   speaker::Speaker *speaker_{nullptr};
