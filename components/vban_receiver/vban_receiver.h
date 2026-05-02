@@ -158,6 +158,257 @@ private:
     size_t _bufferWords;
 };
 
+class VBanPacket
+{
+public:
+  #define VBAN_HEADER_SIZE            (4 + 1 + 1 + 1 + 1 + 16)
+  #define VBAN_STREAM_NAME_SIZE       16
+  #define VBAN_PROTOCOL_MAX_SIZE      1464
+  #define VBAN_DATA_MAX_SIZE          (VBAN_PROTOCOL_MAX_SIZE - VBAN_HEADER_SIZE)
+  #define VBAN_CHANNELS_MAX_NB        256
+  #define VBAN_SAMPLES_MAX_NB         256
+
+
+  #define VBAN_PACKET_MAX_SAMPLES 256  
+  #define VBAN_PACKET_HEADER_BYTES 24  
+  #define VBAN_PACKET_COUNTER_BYTES 4
+  #define VBAN_PACKET_MAX_LEN_BYTES (VBAN_PACKET_HEADER_BYTES + VBAN_PACKET_COUNTER_BYTES + VBAN_PACKET_MAX_SAMPLES*2)
+
+  #define VBAN_SR_MASK                0x1F
+  #define VBAN_SR_MAXNUMBER           21
+  inline constexpr static long VBanSRList[VBAN_SR_MAXNUMBER]=
+  {
+    6000, 12000, 24000, 48000, 96000, 192000, 384000,
+    8000, 16000, 32000, 64000, 128000, 256000, 512000,
+    11025, 22050, 44100, 88200, 176400, 352800, 705600
+  };
+
+  enum VBanSampleRates
+  {
+    SAMPLE_RATE_6000_HZ,
+    SAMPLE_RATE_12000_HZ,
+    SAMPLE_RATE_24000_HZ,
+    SAMPLE_RATE_48000_HZ,
+    SAMPLE_RATE_96000_HZ,
+    SAMPLE_RATE_192000_HZ,
+    SAMPLE_RATE_384000_HZ,
+    SAMPLE_RATE_8000_HZ,
+    SAMPLE_RATE_16000_HZ,
+    SAMPLE_RATE_32000_HZ,
+    SAMPLE_RATE_64000_HZ,
+    SAMPLE_RATE_128000_HZ,
+    SAMPLE_RATE_256000_HZ,
+    SAMPLE_RATE_512000_HZ,
+    SAMPLE_RATE_11025_HZ,
+    SAMPLE_RATE_22050_HZ,
+    SAMPLE_RATE_44100_HZ,
+    SAMPLE_RATE_88200_HZ,
+    SAMPLE_RATE_176400_HZ,
+    SAMPLE_RATE_352800_HZ,
+    SAMPLE_RATE_705600_HZ
+  };
+
+
+  #define VBAN_PROTOCOL_MASK          0xE0
+  enum VBanProtocol
+  {
+    VBAN_PROTOCOL_AUDIO         =   0x00,
+    VBAN_PROTOCOL_SERIAL        =   0x20,
+    VBAN_PROTOCOL_TXT           =   0x40,
+    VBAN_PROTOCOL_UNDEFINED_1   =   0x80,
+    VBAN_PROTOCOL_UNDEFINED_2   =   0xA0,
+    VBAN_PROTOCOL_UNDEFINED_3   =   0xC0,
+    VBAN_PROTOCOL_UNDEFINED_4   =   0xE0
+  };
+
+  #define VBAN_BIT_RESOLUTION_MASK    0x07
+  enum VBanBitResolution
+  {
+    VBAN_BITFMT_8_INT = 0,
+    VBAN_BITFMT_16_INT,
+    VBAN_BITFMT_24_INT,
+    VBAN_BITFMT_32_INT,
+    VBAN_BITFMT_32_FLOAT,
+    VBAN_BITFMT_64_FLOAT,
+    VBAN_BITFMT_12_INT,
+    VBAN_BITFMT_10_INT,
+    VBAN_BIT_RESOLUTION_MAX
+  };
+
+  inline constexpr static int VBanBitResolutionSize[VBAN_BIT_RESOLUTION_MAX]
+  {
+    1, 2, 3, 4, 4, 8
+  };
+
+  #define VBAN_RESERVED_MASK          0x08
+
+  #define VBAN_CODEC_MASK             0xF0
+  enum VBanCodec
+  {
+    VBAN_CODEC_PCM              =   0x00,
+    VBAN_CODEC_VBCA             =   0x10,
+    VBAN_CODEC_VBCV             =   0x20,
+    VBAN_CODEC_UNDEFINED_3      =   0x30,
+    VBAN_CODEC_UNDEFINED_4      =   0x40,
+    VBAN_CODEC_UNDEFINED_5      =   0x50,
+    VBAN_CODEC_UNDEFINED_6      =   0x60,
+    VBAN_CODEC_UNDEFINED_7      =   0x70,
+    VBAN_CODEC_UNDEFINED_8      =   0x80,
+    VBAN_CODEC_UNDEFINED_9      =   0x90,
+    VBAN_CODEC_UNDEFINED_10     =   0xA0,
+    VBAN_CODEC_UNDEFINED_11     =   0xB0,
+    VBAN_CODEC_UNDEFINED_12     =   0xC0,
+    VBAN_CODEC_UNDEFINED_13     =   0xD0,
+    VBAN_CODEC_UNDEFINED_14     =   0xE0,
+    VBAN_CODEC_USER             =   0xF0
+  };
+
+
+  /********************************************************
+   *              TEXT SUB PROTOCOL                       *
+   ********************************************************/
+
+  #define VBAN_BPS_MASK           0xE0
+  #define VBAN_BPS_MAXNUMBER      25
+  inline constexpr static long VBanBPSList[VBAN_BPS_MAXNUMBER] =
+  {
+      0,      110,    150,    300,    600,
+      1200,   2400,   4800,   9600,   14400,
+      19200,  31250,  38400,  57600,  115200,
+      128000, 230400, 250000, 256000, 460800,
+      921600,1000000,1500000,2000000, 3000000
+  };
+
+  #define VBAN_DATATYPE_MASK          0x07
+  #define VBAN_DATATYPE_MAXNUMBER     1
+  enum VBanDataTypeList
+  {
+      VBAN_DATATYPE_8BITS = 0
+  };
+
+  #define VBAN_STREAMTYPE_MASK        0xF0
+  enum VBanStreamType
+  {
+      VBAN_TXT_ASCII          =   0x00,
+      VBAN_TXT_UTF8           =   0x10,
+      VBAN_TXT_WCHAR          =   0x20,
+      VBAN_TXT_UNDEFINED_3    =   0x30,
+      VBAN_TXT_UNDEFINED_4    =   0x40,
+      VBAN_TXT_UNDEFINED_5    =   0x50,
+      VBAN_TXT_UNDEFINED_6    =   0x60,
+      VBAN_TXT_UNDEFINED_7    =   0x70,
+      VBAN_TXT_UNDEFINED_8    =   0x80,
+      VBAN_TXT_UNDEFINED_9    =   0x90,
+      VBAN_TXT_UNDEFINED_10   =   0xA0,
+      VBAN_TXT_UNDEFINED_11   =   0xB0,
+      VBAN_TXT_UNDEFINED_12   =   0xC0,
+      VBAN_TXT_UNDEFINED_13   =   0xD0,
+      VBAN_TXT_UNDEFINED_14   =   0xE0,
+      VBAN_TXT_USER           =   0xF0
+  };
+
+  struct VBanHeaderCodec
+  {
+    VBanHeaderCodec() : sample_rate(0), num_samples(0), num_channels(0), sample_format(0) { }
+    
+    uint8_t     sample_rate;                          /* SR index (see SRList above) */
+    uint8_t     num_samples;                         /* nb sample per frame (1 to 256) */
+    uint8_t     num_channels;                         /* nb channel (1 to 256) */
+    uint8_t     sample_format;  
+
+    unsigned getNumChannels() const { return num_channels + 1; }
+
+    unsigned getSampleRate() const 
+    {
+      unsigned vbanSampleRateIdx = sample_rate & VBAN_SR_MASK;
+      return VBanSRList[vbanSampleRateIdx];
+    }
+
+    VBanProtocol getProtocol() const { return (VBanProtocol)(sample_rate & VBAN_PROTOCOL_MASK); }
+
+    VBanBitResolution getBitrate() const { return (VBanBitResolution)(sample_format & VBAN_BIT_RESOLUTION_MASK); }
+  };
+
+  struct VBanHeader
+  {
+      char        preamble[4];                               /* contains 'V' 'B', 'A', 'N' */
+      VBanHeaderCodec codecInfo;
+      char        stream_name[VBAN_STREAM_NAME_SIZE];  /* stream name */
+  } ;
+
+#if 0
+  struct VBan 
+  {
+    VBanHeader* hdr;
+    uint32_t* packet_counter;
+    uint8_t* data_frame;
+    uint8_t packet[VBAN_PROTOCOL_MAX_SIZE];
+    uint16_t packet_data_bytes;
+    uint16_t packet_total_bytes;
+  };
+#endif  
+
+  static const uint16_t DefaultPort = 6980;
+
+  VBanPacket(const uint8_t *data, int len) : headerStart(data), pktLen(len)
+  { }
+
+  inline bool checkValid() const
+  {
+    if (pktLen <= (VBAN_PACKET_HEADER_BYTES + VBAN_PACKET_COUNTER_BYTES) || (pktLen > VBAN_PACKET_MAX_LEN_BYTES))
+        return false;
+    if (strncmp("VBAN", (char*)headerStart, 4) != 0)
+        return 0;
+    uint16_t vban_rx_data_bytes = pktLen - (VBAN_PACKET_HEADER_BYTES + VBAN_PACKET_COUNTER_BYTES);
+    uint16_t vban_rx_sample_count = vban_rx_data_bytes / 2;
+    if (vban_rx_sample_count > VBAN_PACKET_MAX_SAMPLES)
+        return false;
+    return true;
+  }
+
+  const int16_t * getSamplesData(int *sampleCnt = 0) const
+  {
+    uint16_t vban_rx_data_bytes = pktLen - (VBAN_PACKET_HEADER_BYTES + VBAN_PACKET_COUNTER_BYTES);
+    uint16_t vban_rx_sample_count = vban_rx_data_bytes / 2;
+    if (sampleCnt)
+        *sampleCnt = vban_rx_sample_count;
+    return (int16_t*)&headerStart[VBAN_PACKET_HEADER_BYTES + VBAN_PACKET_COUNTER_BYTES];
+  }
+
+  const VBanHeader & getHeader() const { return *((const VBanHeader *)headerStart); }
+
+  std::string getStreamName() const
+  {
+    const VBanHeader &header = getHeader();
+    char stream_name[sizeof(header.stream_name) + 1];
+    strncpy(stream_name, header.stream_name, sizeof(header.stream_name));
+    stream_name[sizeof(header.stream_name)] = '\0';
+    return std::string(stream_name);
+  }
+  bool checkStreamName(const char* name) const
+  {
+	const VBanHeader &header = getHeader();
+	return ::strncmp(name, header.stream_name, sizeof(header.stream_name)) == 0;
+  }
+
+  unsigned getNumChannels() const { return getHeader().codecInfo.getNumChannels(); }
+
+  unsigned getSampleRate() const { return getHeader().codecInfo.getSampleRate(); }
+
+  VBanProtocol getProtocol() const { return getHeader().codecInfo.getProtocol(); }
+
+  VBanBitResolution getBitrate() const { return getHeader().codecInfo.getBitrate(); }
+
+  uint32_t getFrameNum() const {
+    return ((uint32_t) headerStart[24])
+		   | ((uint32_t) headerStart[25] << 8)
+		   | ((uint32_t) headerStart[26] << 16)
+		   | ((uint32_t) headerStart[27] << 24);	  
+  }
+private:
+  const uint8_t *headerStart;
+  int pktLen;
+};
 
 class VBANReceiver : public Component {
  public:
@@ -169,9 +420,6 @@ class VBANReceiver : public Component {
   float get_setup_priority() const override { return setup_priority::AFTER_WIFI; }
 
   void setup() override {
-    //ring_.assign(kRingCapacity, 0);
-	sockBuff_.assign(2000, 0);
-
     sock_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock_ < 0) {
       ESP_LOGE("vban_rx", "socket() failed: errno=%d", errno);
@@ -212,27 +460,8 @@ class VBANReceiver : public Component {
   }
 
   void loop() override {
-#if 0	  
-    struct sockaddr_in from;
-    socklen_t fromlen = sizeof(from);
 
-    for (int i = 0; i < 16; i++) {
-      int n = ::recvfrom(sock_, sockBuff_.data(), sockBuff_.size(), 0,
-                        (struct sockaddr *)&from, &fromlen);
-	  if (n >= 0) {
-		raw_packets_received_++;
-		handle_packet_(sockBuff_.data(), n);
-	  }
-	  else
-		break;
-      
-    }
-#endif
     //drain_ring_to_speaker_();
-
-    if (playing_ && (millis() - last_packet_ms_) > idle_timeout_ms_) {
-      stop_playback_();
-    }
   }
 
   void dump_config() override {
@@ -244,8 +473,11 @@ class VBANReceiver : public Component {
     ESP_LOGCONFIG("vban_rx", "  Raw packets received: %u", (unsigned) raw_packets_received_);
     ESP_LOGCONFIG("vban_rx", "  Packets received: %u", (unsigned) packets_received_);
     ESP_LOGCONFIG("vban_rx", "  Packets lost:     %u", (unsigned) packets_lost_);
+	ESP_LOGCONFIG("vban_rx", "  Data overflows:   %u", (unsigned) data_overflows_);
     ESP_LOGCONFIG("vban_rx", "  Out of order:     %u", (unsigned) packets_out_of_order_);
   }
+  
+  bool playing() const { return !!audioOut; }
 
  protected:
  
@@ -256,6 +488,9 @@ class VBANReceiver : public Component {
   }
   void socketTask()
   {	  
+    //ring_.assign(kRingCapacity, 0);
+	sockBuff_.assign(2000, 0);
+
 	struct sockaddr_in from;
     socklen_t fromlen = sizeof(from);
 
@@ -266,6 +501,14 @@ class VBANReceiver : public Component {
 	  if (n >= 0) {
 		raw_packets_received_++;
 		handle_packet_(sockBuff_.data(), n);
+		
+		VBanPacket packet(sockBuff_.data(), n);
+		if (packet.checkValid()) {
+			handle_packet_(packet);
+		}
+		else {
+			log_format_warning_("header", 0));
+		}
 	  }
 	  else {
 	    if (errno == EINPROGRESS || errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -273,59 +516,40 @@ class VBANReceiver : public Component {
         }
 		else
 		  ESP_LOGD("vban_rx", "Socket error, errno: %d", errno);
+	  
+		if (playing() && (millis() - last_packet_ms_) > idle_timeout_ms_) {
+		  stop_playback_();
+		}
+	  
 		vTaskDelay(1);
       }
     }
 	vTaskDelete(0);
   }
  
-  void handle_packet_(const uint8_t *buf, int n) {
-	if (n < 24)
-		return;
-	
-    if (buf[0] != 'V' || buf[1] != 'B' || buf[2] != 'A' || buf[3] != 'N') {
-		log_format_warning_("header", *((uint32_t*)buf));
-		return;
+  void handle_packet_(const VBanPacket &packet) {
+	  
+	if (packet.getProtocol() != VBAN_PROTOCOL_AUDIO)
+	  return;
+	if (packet.getBitrate() != VBAN_BITFMT_16_INT) {
+	  log_format_warning_("format", (unsigned)packet.getBitrate());
+	  return;
+	}
+	if (packet.getNumChannels() != 2) {
+	  log_format_warning_("channels", packet.getNumChannels());
+	  return;
+	}
+	if (!packet.checkStreamName(stream_name_.c_str())) {
+	  log_format_warning_("stream", 0);
+	  return;
 	}
 
-    uint8_t sub_protocol = buf[4] & 0xE0;
-    if (sub_protocol != 0x00) 
-		return;  // only audio sub-protocol
-
-    uint8_t format_bit = buf[7] & 0x07;
-    if (format_bit != 0x01) { // 16-bit
-      log_format_warning_("format", format_bit);
-      return;
-    }
-
-    uint8_t sr_index = buf[4] & 0x1F;
-    if (sr_index != VBAN_SR_48000) {
-      log_format_warning_("sample_rate", sr_index);
-      return;
-    }
-
-    uint8_t channels = buf[6] + 1;
-    if (channels != 2) {
-      log_format_warning_("channels", channels);
-      return;
-    }
-
-    if (std::strncmp((char*)(buf + 8), stream_name_.c_str(), 16) != 0) {
-		log_format_warning_("stream", 0);
-		return;
-	}
+	unsigned sr = packet.getSampleRate();
 
     const uint8_t *pcm = buf + 28;
     size_t pcm_len = n - 28;
-    if (n <= 28) {
-		log_format_warning_("pcm_len", 0);
-		return;
-	}
 
-    uint32_t frame = ((uint32_t) buf[24])
-                   | ((uint32_t) buf[25] << 8)
-                   | ((uint32_t) buf[26] << 16)
-                   | ((uint32_t) buf[27] << 24);
+    uint32_t frame = packet.getFrameNum();
     if (packets_received_ > 0) {
       uint32_t expected = last_frame_counter_ + 1;
       if (frame != expected) {
@@ -342,22 +566,37 @@ class VBANReceiver : public Component {
     packets_received_++;
     last_packet_ms_ = millis();
 
-    if (!playing_) {
+    if (!playing()) {
       start_playback_(48000);
     }
 
-#if 0
+#if 1
+	unsigned vbanNbr;
+	const int16_t *pcmSamples = packet.getSamplesData(&vbanNbr);
+	if ((vbanNbr & 1) == 0) {
+		for (; vbanNbr > 0; ) {
+			if (audioOut->consumeSample(pcmSamples)) {
+				vbanNbr -= 2;
+				pcmSamples += 2;
+			}
+			else {
+				data_overflows_++;
+				break;
+			}
+		}
+	}
+
+#else
     bool can_play_live = speaker_ != nullptr && speaker_->is_running() && ring_empty_();
     if (can_play_live) {
       size_t written = speaker_->play(pcm, pcm_len);
       if (written < pcm_len) {
         ring_write_(pcm + written, pcm_len - written);
       }
-    } else 
-#endif		
-	{
+    } else {
       ring_write_(pcm, pcm_len);
     }
+#endif		
   }
 #if 0
   void drain_ring_to_speaker_() {
@@ -391,22 +630,14 @@ class VBANReceiver : public Component {
     void ring_write_(const uint8_t *pcmData, size_t len) {	 
 		unsigned vbanNbr = len / 2;
 		const int16_t *pcmSamples = (const int16_t *)pcmData;
-		if (audioOut && vbanNbr > 0 && (vbanNbr & 1) == 0)
-        {
-            //static uint32_t lvl;
-            //gpio_set_level(GPIO_NUM_5, lvl);
-            //lvl ^= 1;
-
-            for (; vbanNbr > 0; )
-            {
-                if (audioOut->consumeSample(pcmSamples))
-                {
+		if (audioOut && vbanNbr > 0 && (vbanNbr & 1) == 0) {
+            for (; vbanNbr > 0; ) {
+                if (audioOut->consumeSample(pcmSamples)) {
                     vbanNbr -= 2;
                     pcmSamples += 2;
                 }
-                else
-                {
-                    //overflowCnt++;
+                else {
+                    data_overflows_++;
                     break;
                 }
             }
@@ -448,7 +679,6 @@ class VBANReceiver : public Component {
 	audioOut->setRate(sampleRate);
 	audioOut->begin();
 #endif
-    playing_ = true;
     ESP_LOGD("vban_rx", "Stream '%s' started", stream_name_.c_str());
   }
 
@@ -461,7 +691,6 @@ class VBANReceiver : public Component {
 #else	
 	audioOut = 0;
 #endif	
-    playing_ = false;
     ESP_LOGD("vban_rx", "Stream idle");
   }
 
@@ -477,9 +706,9 @@ class VBANReceiver : public Component {
   uint32_t raw_packets_received_{0};
   uint32_t packets_received_{0};
   uint32_t packets_lost_{0};
+  uint32_t data_overflows_{0};
   uint32_t packets_out_of_order_{0};
   uint32_t last_frame_counter_{0};
-  bool playing_{false};
 
   // Fixed-capacity circular buffer (~1 s at 16 kHz 16-bit mono).
 #if 0  
