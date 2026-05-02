@@ -118,7 +118,7 @@ class VBANReceiver : public Component {
     }
 
     uint8_t sr_index = buf[4] & 0x1F;
-    if (sr_index != VBAN_SR_16000) {
+    if (sr_index != VBAN_SR_48000) {
       log_format_warning_("sample_rate", sr_index);
       return;
     }
@@ -253,7 +253,7 @@ class VBANReceiver : public Component {
   bool playing_{false};
 
   // Fixed-capacity circular buffer (~1 s at 16 kHz 16-bit mono).
-  static constexpr size_t kRingCapacity = 32 * 1024;
+  static constexpr size_t kRingCapacity = 3*32 * 1024;
   std::vector<uint8_t> ring_;
   size_t write_idx_{0};
   size_t ring_size_{0};
