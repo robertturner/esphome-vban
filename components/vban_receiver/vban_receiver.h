@@ -12,6 +12,7 @@
 #include <cstring>
 #include <vector>
 #include <algorithm>
+#include <memory>
 
 namespace esphome {
 namespace vban_receiver {

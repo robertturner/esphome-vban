@@ -5,7 +5,7 @@ from esphome.const import CONF_ID
 
 CODEOWNERS = ["@powange"]
 #DEPENDENCIES = ["network", "speaker"]
-DEPENDENCIES = ["network"]
+DEPENDENCIES = ["network", "esp32"]
 
 vban_receiver_ns = cg.esphome_ns.namespace("vban_receiver")
 VBANReceiver = vban_receiver_ns.class_("VBANReceiver", cg.Component)
@@ -27,6 +27,10 @@ CONFIG_SCHEMA = cv.Schema({
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
+    
+    include_builtin_idf_component("esp_driver_i2s")
+    
+    add_idf_sdkconfig_option("CONFIG_I2S_ISR_IRAM_SAFE", True)
 
     #spk = await cg.get_variable(config[CONF_SPEAKER])
     #cg.add(var.set_speaker(spk))
