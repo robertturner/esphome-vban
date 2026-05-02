@@ -1,11 +1,14 @@
 #pragma once
 #include "esphome.h"
-#include "esphome/components/speaker/speaker.h"
+//#include "esphome/components/speaker/speaker.h"
+#include <driver/i2s_std.h>
 
 #include <lwip/sockets.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
 
+#include <functional>
+#include <stdint.h>
 #include <cstring>
 #include <vector>
 #include <algorithm>
@@ -16,9 +19,149 @@ namespace vban_receiver {
 static const uint8_t VBAN_SR_16000 = 8;
 static const uint8_t VBAN_SR_48000 = 3;
 
+class AudioOutput
+{
+public:
+    AudioOutput() : _tx_handle(0) { }
+    virtual ~AudioOutput() { }
+
+    virtual bool setRate(int hz) = 0;
+    virtual int getRate() const = 0;
+
+    virtual bool begin(std::function<void(i2s_chan_handle_t)> initCallback = 0) = 0;
+    virtual bool consumeSample(const int16_t sample[2]) = 0;
+    virtual bool stop() = 0;
+
+    i2s_chan_handle_t getHandle() const { return _tx_handle; }
+protected:
+    i2s_chan_handle_t _tx_handle;
+};
+
+static constexpr uint32_t I2S_DMA_BUF_COUNT_DEFAULT  8
+static constexpr uint32_t I2S_DMA_BUF_SIZE_DEFAULT   256
+
+class AudioOutputI2S : public AudioOutput
+{
+public:
+
+
+    AudioOutputI2S(int dout_pin, int mclk_pin, int bclk_pin, int ws_pin) : hertz(44100),
+                                                                                        i2sOn(false),
+                                                                                        dout_pin(dout_pin),
+                                                                                        mclk_pin(mclk_pin),
+                                                                                        bclk_pin(bclk_pin),
+                                                                                        ws_pin(ws_pin)
+	{ }
+    virtual ~AudioOutputI2S() { stop(); }
+
+    //bool setPinout(int dout_pin, int mclk_pin, int bclk_pin, int ws_pin);
+    bool setBuffers(int dmaBuffers = I2S_DMA_BUF_COUNT_DEFAULT, int dmaBufferBytes = I2S_DMA_BUF_SIZE_DEFAULT) {
+		if (i2sOn || (dmaBufferCount < 3) || (dmaBufferBytes & 3))
+			return false;
+		_buffers = dmaBufferCount;
+		_bufferWords = dmaBufferBytes / 4;
+		return true;
+	}
+
+    bool setRate(int hz) override {
+		if (hz < 32000)
+			return false;
+		if (hz == hertz)
+			return true;
+		hertz = hz;
+		if (i2sOn)
+		{
+			i2s_std_clk_config_t clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG((uint32_t)hz);
+	#if SOC_CLK_APLL_SUPPORTED
+			clk_cfg.clk_src = i2s_clock_src_t::I2S_CLK_SRC_APLL;
+	#endif
+			i2s_channel_disable(_tx_handle);
+			i2s_channel_reconfig_std_clock(_tx_handle, &clk_cfg);
+			i2s_channel_enable(_tx_handle);
+		}
+		return true;
+	}
+    int getRate() const override { return hertz; }
+
+    bool begin(std::function<void(i2s_chan_handle_t)> initCallback = 0) override {
+		if (i2sOn)
+			return false;
+
+		i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
+		chan_cfg.dma_desc_num = _buffers;
+		chan_cfg.dma_frame_num = _bufferWords;
+		chan_cfg.auto_clear = true;
+		assert(ESP_OK == i2s_new_channel(&chan_cfg, &_tx_handle, nullptr));
+
+		i2s_std_config_t std_cfg = {
+			.clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG((uint32_t)hertz),
+			.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
+			.gpio_cfg = {
+				.mclk = (mclk_pin < 0) ? I2S_GPIO_UNUSED : (gpio_num_t)mclk_pin,
+				.bclk = (bclk_pin < 0) ? I2S_GPIO_UNUSED : (gpio_num_t)bclk_pin,
+				.ws = (ws_pin < 0) ? I2S_GPIO_UNUSED : (gpio_num_t)ws_pin,
+				.dout = (dout_pin < 0) ? I2S_GPIO_UNUSED : (gpio_num_t)dout_pin,
+				.din = I2S_GPIO_UNUSED,
+				.invert_flags = {
+					.mclk_inv = false,
+					.bclk_inv = false,
+					.ws_inv = false,
+				},
+			},
+		};
+		//I2S_STD_PHILIP_SLOT_DEFAULT_CONFIG
+		//I2S_STD_MSB_SLOT_DEFAULT_CONFIG
+	#if SOC_CLK_APLL_SUPPORTED
+		std_cfg.clk_cfg.clk_src = i2s_clock_src_t::I2S_CLK_SRC_APLL;
+	#endif
+		std_cfg.slot_cfg.bit_shift = true;
+		assert(ESP_OK == i2s_channel_init_std_mode(_tx_handle, &std_cfg));
+
+		int16_t a[2] = {0, 0};
+		size_t written = 0;
+		do {
+			i2s_channel_preload_data(_tx_handle, (void*)a, sizeof(a), &written);
+		} while (written);
+
+		if (initCallback)
+			initCallback(_tx_handle);
+		assert(ESP_OK == i2s_channel_enable(_tx_handle));
+
+		i2sOn = true;
+		return true;
+	}
+    bool consumeSample(const int16_t sample[2]) override {
+		if (!i2sOn)
+			return false;
+
+		uint32_t s32 = ((uint32_t)((uint16_t)sample[1]) << 16) | (uint32_t)((uint16_t)sample[0] & 0xffff);
+		//uint32_t s32 = (((sample[1])) << 16) | ((sample[0]) & 0xffff);
+
+		size_t i2s_bytes_written = sizeof(uint32_t);
+		i2s_channel_write(_tx_handle, (const char*)&s32, sizeof(uint32_t), &i2s_bytes_written, 0);
+		return i2s_bytes_written;
+	}
+    bool stop() override {
+		if (!i2sOn) {
+			i2sOn = false;
+			i2s_channel_disable(_tx_handle);
+			i2s_del_channel(_tx_handle);
+		}
+		return true;
+	}
+
+private:
+    uint16_t hertz;
+    bool i2sOn;
+    int8_t dout_pin, mclk_pin, bclk_pin, ws_pin;
+    size_t _buffers;
+    size_t _bufferWords;
+};
+
+
 class VBANReceiver : public Component {
  public:
-  void set_speaker(speaker::Speaker *spk) { speaker_ = spk; }
+  //void set_speaker(speaker::Speaker *spk) { speaker_ = spk; }
   void set_listen_port(uint16_t port) { listen_port_ = port; }
   void set_stream_name(const std::string &name) { stream_name_ = name; }
   void set_idle_timeout_ms(uint32_t ms) { idle_timeout_ms_ = ms; }
@@ -26,7 +169,8 @@ class VBANReceiver : public Component {
   float get_setup_priority() const override { return setup_priority::AFTER_WIFI; }
 
   void setup() override {
-    ring_.assign(kRingCapacity, 0);
+    //ring_.assign(kRingCapacity, 0);
+	sockBuff_.assign(2000, 0);
 
     sock_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock_ < 0) {
@@ -59,15 +203,11 @@ class VBANReceiver : public Component {
   }
 
   void loop() override {
-	const unsigned bufLen = 2048;
-    static uint8_t *buf = 0;
-	if (!buf)
-		buf = (uint8_t *)malloc(bufLen);
     struct sockaddr_in from;
     socklen_t fromlen = sizeof(from);
 
     for (int i = 0; i < 8; i++) {
-      int n = ::recvfrom(sock_, buf, bufLen, 0,
+      int n = ::recvfrom(sock_, sockBuff_.data(), sockBuff_.size(), 0,
                         (struct sockaddr *)&from, &fromlen);
 	  if (n >= 0)
 	  {
@@ -78,10 +218,10 @@ class VBANReceiver : public Component {
 			log_format_warning_("n", (unsigned)n);
 		  break;
 	  }
-      handle_packet_(buf, n);
+      handle_packet_(sockBuff_.data(), n);
     }
 
-    drain_ring_to_speaker_();
+    //drain_ring_to_speaker_();
 
     if (playing_ && (millis() - last_packet_ms_) > idle_timeout_ms_) {
       stop_playback_();
@@ -165,17 +305,20 @@ class VBANReceiver : public Component {
       start_playback_();
     }
 
+#if 0
     bool can_play_live = speaker_ != nullptr && speaker_->is_running() && ring_empty_();
     if (can_play_live) {
       size_t written = speaker_->play(pcm, pcm_len);
       if (written < pcm_len) {
         ring_write_(pcm + written, pcm_len - written);
       }
-    } else {
+    } else 
+#endif		
+	{
       ring_write_(pcm, pcm_len);
     }
   }
-
+#if 0
   void drain_ring_to_speaker_() {
     if (!playing_ || speaker_ == nullptr || !speaker_->is_running()) return;
     while (!ring_empty_()) {
@@ -190,7 +333,7 @@ class VBANReceiver : public Component {
     }
   }
 
-  void ring_write_(const uint8_t *data, size_t len) {
+  void ring_write_(const uint8_t *data, size_t len) {	  
     size_t room = kRingCapacity - ring_size_;
     size_t to_copy = std::min(len, room);
     if (to_copy == 0) 
@@ -203,14 +346,42 @@ class VBANReceiver : public Component {
     write_idx_ = (write_idx_ + to_copy) % kRingCapacity;
     ring_size_ += to_copy;
   }
+#else
+    void ring_write_(const uint8_t *pcmData, size_t len) {	 
+		unsigned vbanNbr = len / 2;
+		if (audioOut && vbanNbr > 0 && (vbanNbr & 1) == 0)
+        {
+            //static uint32_t lvl;
+            //gpio_set_level(GPIO_NUM_5, lvl);
+            //lvl ^= 1;
 
+            for (; vbanNbr > 0; )
+            {
+                if (audioOut->consumeSample(pcmData))
+                {
+                    vbanNbr -= 2;
+                    pcmData += 2;
+                }
+                else
+                {
+                    //overflowCnt++;
+                    break;
+                }
+            }
+        }
+
+
+	}
+#endif	
+
+#if 0
   bool ring_empty_() const { return ring_size_ == 0; }
 
   void ring_reset_() {
     ring_size_ = 0;
     write_idx_ = 0;
   }
-
+#endif
   void log_format_warning_(const char *field, uint8_t value) {
     uint32_t now = millis();
     if (now - last_format_warning_ms_ < 1000) 
@@ -222,24 +393,38 @@ class VBANReceiver : public Component {
   }
 
   void start_playback_() {
+#if 0
     if (speaker_ != nullptr && !speaker_->is_running()) {
       speaker_->start();
     }
+#else
+	std::unique_ptr<AudioOutputI2S> i2s = std::make_unique<AudioOutputI2S>(GPIO_NUM_5, -1, GPIO_NUM_33, GPIO_NUM_17);
+	i2s->setBuffers(16, 1024);
+	audioOut = std::move(i2s);
+	audioOut->setRate(16000);
+	audioOut->begin();
+#endif
     playing_ = true;
     ESP_LOGD("vban_rx", "Stream '%s' started", stream_name_.c_str());
   }
 
   void stop_playback_() {
+#if 0	  
     if (speaker_ != nullptr && speaker_->is_running()) {
       speaker_->stop();
     }
     ring_reset_();
+#else	
+	audioOut = 0;
+#endif	
     playing_ = false;
     ESP_LOGD("vban_rx", "Stream idle");
   }
 
-  speaker::Speaker *speaker_{nullptr};
+  //speaker::Speaker *speaker_{nullptr};
+  std::unique_ptr<AudioOutput> audioOut;
   int sock_{-1};
+  std::vector<uint8_t> sockBuff_;
   uint16_t listen_port_{6980};
   std::string stream_name_;
   uint32_t idle_timeout_ms_{1500};
@@ -253,10 +438,12 @@ class VBANReceiver : public Component {
   bool playing_{false};
 
   // Fixed-capacity circular buffer (~1 s at 16 kHz 16-bit mono).
+#if 0  
   static constexpr size_t kRingCapacity = 32 * 1024;
   std::vector<uint8_t> ring_;
   size_t write_idx_{0};
   size_t ring_size_{0};
+#endif  
 };
 
 }  // namespace vban_receiver
