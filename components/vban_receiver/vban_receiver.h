@@ -205,19 +205,16 @@ class VBANReceiver : public Component {
     struct sockaddr_in from;
     socklen_t fromlen = sizeof(from);
 
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 16; i++) {
       int n = ::recvfrom(sock_, sockBuff_.data(), sockBuff_.size(), 0,
                         (struct sockaddr *)&from, &fromlen);
-	  if (n >= 0)
-	  {
-		  raw_packets_received_++;
+	  if (n >= 0) {
+		raw_packets_received_++;
+		handle_packet_(sockBuff_.data(), n);
 	  }
-      if (n < 28) {
-		  if (n >= 0)
-			log_format_warning_("n", (unsigned)n);
-		  break;
-	  }
-      handle_packet_(sockBuff_.data(), n);
+	  else
+		break;
+      
     }
 
     //drain_ring_to_speaker_();
@@ -241,6 +238,9 @@ class VBANReceiver : public Component {
 
  protected:
   void handle_packet_(const uint8_t *buf, int n) {
+	if (n < 24)
+		return;
+	
     if (buf[0] != 'V' || buf[1] != 'B' || buf[2] != 'A' || buf[3] != 'N') {
 		log_format_warning_("header", *((uint32_t*)buf));
 		return;
@@ -301,7 +301,7 @@ class VBANReceiver : public Component {
     last_packet_ms_ = millis();
 
     if (!playing_) {
-      start_playback_();
+      start_playback_(48000);
     }
 
 #if 0
@@ -392,18 +392,18 @@ class VBANReceiver : public Component {
              field, (unsigned) value);
   }
 
-  void start_playback_() {
+  void start_playback_(unsigned sampleRate) {
 #if 0
     if (speaker_ != nullptr && !speaker_->is_running()) {
       speaker_->start();
     }
 #else
-	AudioOutputI2S *i2sPtr = new AudioOutputI2S(GPIO_NUM_5, -1, GPIO_NUM_33, GPIO_NUM_17);
-	std::unique_ptr<AudioOutputI2S> i2s = std::unique_ptr<AudioOutputI2S>(i2sPtr);
-	//std::unique_ptr<AudioOutputI2S> i2s = std::make_unique<AudioOutputI2S>(GPIO_NUM_5, -1, GPIO_NUM_33, GPIO_NUM_17);
-	i2s->setBuffers(16, 1024);
+	//AudioOutputI2S *i2sPtr = new AudioOutputI2S(GPIO_NUM_5, -1, GPIO_NUM_33, GPIO_NUM_17);
+	//std::unique_ptr<AudioOutputI2S> i2s = std::unique_ptr<AudioOutputI2S>(i2sPtr);
+	std::unique_ptr<AudioOutputI2S> i2s = std::make_unique<AudioOutputI2S>(GPIO_NUM_5, -1, GPIO_NUM_33, GPIO_NUM_17);
+	i2s->setBuffers(16, 2*1024);
 	audioOut = std::move(i2s);
-	audioOut->setRate(48000);
+	audioOut->setRate(sampleRate);
 	audioOut->begin();
 #endif
     playing_ = true;
