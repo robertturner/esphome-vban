@@ -1,4 +1,11 @@
 import esphome.codegen as cg
+
+from esphome.components.esp32 import (
+    add_idf_sdkconfig_option,
+    get_esp32_variant,
+    include_builtin_idf_component,
+)
+
 import esphome.config_validation as cv
 #from esphome.components import speaker
 from esphome.const import CONF_ID
