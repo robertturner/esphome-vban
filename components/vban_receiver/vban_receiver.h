@@ -259,7 +259,7 @@ class VBANReceiver : public Component {
 	struct sockaddr_in from;
     socklen_t fromlen = sizeof(from);
 
-    for (int i = 0; i < 16; i++) {
+    for (;;) {
       int n = ::recvfrom(sock_, sockBuff_.data(), sockBuff_.size(), 0,
                         (struct sockaddr *)&from, &fromlen);
 						
@@ -270,14 +270,13 @@ class VBANReceiver : public Component {
 	  else {
 	    if (errno == EINPROGRESS || errno == EAGAIN || errno == EWOULDBLOCK) {
           // not an error
-          vTaskDelay(1);
         }
 		else
-			ESP_LOGD("vban_rx", "Socket error, errno: %d", errno);
-		break;
+		  ESP_LOGD("vban_rx", "Socket error, errno: %d", errno);
+		vTaskDelay(1);
       }
     }
-	  
+	vTaskDelete(0);
   }
  
   void handle_packet_(const uint8_t *buf, int n) {
