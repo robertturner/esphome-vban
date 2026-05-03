@@ -374,7 +374,7 @@ public:
     strncpy(name.data(), header.stream_name, sizeof(header.stream_name));
     name.resize(strlen(name.c_str()));
   }
-  bool checkStreamName(const char* name) const
+  bool checkStreamName(const char *name) const
   {
 	const VBanHeader &header = getHeader();
 	return ::strncmp(name, header.stream_name, sizeof(header.stream_name)) == 0;
@@ -389,10 +389,10 @@ public:
   VBanBitResolution getBitrate() const { return getHeader().codecInfo.getBitrate(); }
 
   uint32_t getFrameNum() const {
-    return ((uint32_t) headerStart[24])
-		   | ((uint32_t) headerStart[25] << 8)
-		   | ((uint32_t) headerStart[26] << 16)
-		   | ((uint32_t) headerStart[27] << 24);	  
+    return ((uint32_t) headerStart[VBAN_PACKET_HEADER_BYTES])
+		   | ((uint32_t) headerStart[VBAN_PACKET_HEADER_BYTES+1] << 8)
+		   | ((uint32_t) headerStart[VBAN_PACKET_HEADER_BYTES+2] << 16)
+		   | ((uint32_t) headerStart[VBAN_PACKET_HEADER_BYTES+3] << 24);	  
   }
 private:
   const uint8_t *headerStart;
@@ -411,7 +411,7 @@ class VBANReceiver : public Component {
 
   float get_setup_priority() const override { return setup_priority::AFTER_WIFI; }
 
-  void setup() override {
+  void setup() override {	
     sock_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock_ < 0) {
       ESP_LOGE("vban_rx", "socket() failed: errno=%d", errno);
@@ -443,6 +443,10 @@ class VBANReceiver : public Component {
 	xTaskCreate(socketTask_, "vban", 3000, this, ESP_TASK_PRIO_MAX - 1, 0);
 
     ESP_LOGI("vban_rx", "Listening on UDP %d for VBAN stream '%s'", listen_port_, stream_name_.c_str());
+  }
+  
+  void loop() override {
+	  disable_loop(); // We use our own thread
   }
 
   void dump_config() override {

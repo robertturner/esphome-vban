@@ -11,9 +11,11 @@ import esphome.config_validation as cv
 #from esphome.components import speaker
 from esphome.const import CONF_ID
 
-CODEOWNERS = ["@powange"]
+CODEOWNERS = ["@robertturner"]
 #DEPENDENCIES = ["network", "speaker"]
 DEPENDENCIES = ["network", "esp32"]
+
+AUTO_LOAD = ["socket"]
 
 vban_receiver_ns = cg.esphome_ns.namespace("vban_receiver")
 VBANReceiver = vban_receiver_ns.class_("VBANReceiver", cg.Component)
@@ -28,17 +30,25 @@ CONF_I2S_MCLK_PIN = "i2s_mclk_pin"
 CONF_I2S_BCLK_PIN = "i2s_bclk_pin"
 CONF_I2S_LRCLK_PIN = "i2s_lrclk_pin"
 
-CONFIG_SCHEMA = cv.Schema({
-    cv.GenerateID(): cv.declare_id(VBANReceiver),
-    #cv.Required(CONF_SPEAKER): cv.use_id(speaker.Speaker),
-    cv.Optional(CONF_LISTEN_PORT, default=6980): cv.port,
-    cv.Optional(CONF_STREAM_NAME): cv.All(cv.string, cv.Length(max=16)),
-    cv.Optional(CONF_IDLE_TIMEOUT_MS, default=1500): cv.positive_int,
-    cv.Required(CONF_I2S_DOUT_PIN): pins.internal_gpio_output_pin_number,
-    cv.Optional(CONF_I2S_MCLK_PIN): pins.internal_gpio_output_pin_number,
-    cv.Required(CONF_I2S_BCLK_PIN): pins.internal_gpio_output_pin_number,
-    cv.Required(CONF_I2S_LRCLK_PIN): pins.internal_gpio_output_pin_number,
-}).extend(cv.COMPONENT_SCHEMA)
+def _consume_sockets(config):
+    """Register socket needs for this component."""
+    socket.consume_sockets(1, "vban_receiver")(config)
+    return config
+
+CONFIG_SCHEMA = cv.All(
+    cv.Schema({
+        cv.GenerateID(): cv.declare_id(VBANReceiver),
+        #cv.Required(CONF_SPEAKER): cv.use_id(speaker.Speaker),
+        cv.Optional(CONF_LISTEN_PORT, default=6980): cv.port,
+        cv.Optional(CONF_STREAM_NAME): cv.All(cv.string, cv.Length(max=16)),
+        cv.Optional(CONF_IDLE_TIMEOUT_MS, default=1500): cv.positive_int,
+        cv.Required(CONF_I2S_DOUT_PIN): pins.internal_gpio_output_pin_number,
+        cv.Optional(CONF_I2S_MCLK_PIN): pins.internal_gpio_output_pin_number,
+        cv.Required(CONF_I2S_BCLK_PIN): pins.internal_gpio_output_pin_number,
+        cv.Required(CONF_I2S_LRCLK_PIN): pins.internal_gpio_output_pin_number,
+    }).extend(cv.COMPONENT_SCHEMA),
+    _consume_sockets
+)
 
 
 async def to_code(config):
