@@ -1,3 +1,4 @@
+from esphome import pins
 import esphome.codegen as cg
 
 from esphome.components.esp32 import (
@@ -55,7 +56,8 @@ async def to_code(config):
     cg.add(var.set_stream_name(config[CONF_STREAM_NAME]))
     cg.add(var.set_idle_timeout_ms(config[CONF_IDLE_TIMEOUT_MS]))
     cg.add(var.set_dout_pin(config[CONF_I2S_DOUT_PIN]))
-    cg.add(var.set_mclk_pin(config[CONF_I2S_MCLK_PIN]))
+    if CONF_I2S_MCLK_PIN in config:
+        cg.add(var.set_mclk_pin(config[CONF_I2S_MCLK_PIN]))
     cg.add(var.set_bclk_pin(config[CONF_I2S_BCLK_PIN]))
     cg.add(var.set_lrclk_pin(config[CONF_I2S_LRCLK_PIN]))
     
