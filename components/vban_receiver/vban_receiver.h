@@ -367,7 +367,7 @@ public:
     stream_name[sizeof(header.stream_name)] = '\0';
     return std::string(stream_name);
   }
-  void getStreamName(std::string &name)
+  void getStreamName(std::string &name) const
   {
     const VBanHeader &header = getHeader();
 	name.resize(sizeof(header.stream_name));
