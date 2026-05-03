@@ -142,7 +142,7 @@ public:
 		return i2s_bytes_written;
 	}
     bool stop() override {
-		if (!i2sOn) {
+		if (i2sOn) {
 			i2sOn = false;
 			i2s_channel_disable(_tx_handle);
 			i2s_del_channel(_tx_handle);
