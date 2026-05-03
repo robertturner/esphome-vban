@@ -393,7 +393,7 @@ private:
 };
 
 class VBANReceiver : public Component {
- public:
+ public: 
   void set_listen_port(uint16_t port) { listen_port_ = port; }
   void set_stream_name(const std::string &name) { stream_name_ = name; }
   void set_idle_timeout_ms(uint32_t ms) { idle_timeout_ms_ = ms; }
@@ -614,7 +614,7 @@ class VBANReceiver : public Component {
   uint32_t data_overflows_{0};
   uint32_t packets_out_of_order_{0};
   uint32_t last_frame_counter_{0};
-  gpio_num_t dout_pin_, mclk_pin_, bclk_pin_, lrclk_pin_;
+  gpio_num_t dout_pin_{-1}, mclk_pin_{-1}, bclk_pin_{-1}, lrclk_pin_{-1};
 
 };
 
