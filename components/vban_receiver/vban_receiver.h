@@ -367,6 +367,13 @@ public:
     stream_name[sizeof(header.stream_name)] = '\0';
     return std::string(stream_name);
   }
+  void getStreamName(std::string &name)
+  {
+    const VBanHeader &header = getHeader();
+	name.resize(sizeof(header.stream_name));
+    strncpy(name.data(), header.stream_name, sizeof(header.stream_name));
+    name.resize(strlen(name.c_str()));
+  }
   bool checkStreamName(const char* name) const
   {
 	const VBanHeader &header = getHeader();
@@ -430,19 +437,17 @@ class VBANReceiver : public Component {
 
 	struct timeval timeout;
 	timeout.tv_sec = 0;
-	timeout.tv_usec = 5000;
+	timeout.tv_usec = 50000;
 	::setsockopt(sock_, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
 	xTaskCreate(socketTask_, "vban", 3000, this, ESP_TASK_PRIO_MAX - 1, 0);
 
-    ESP_LOGI("vban_rx", "Listening on UDP %d for VBAN stream '%s'",
-             listen_port_, stream_name_.c_str());
+    ESP_LOGI("vban_rx", "Listening on UDP %d for VBAN stream '%s'", listen_port_, stream_name_.c_str());
   }
 
   void dump_config() override {
     ESP_LOGCONFIG("vban_rx", "VBAN Receiver:");
     ESP_LOGCONFIG("vban_rx", "  Listen port: %d", listen_port_);
-    ESP_LOGCONFIG("vban_rx", "  Stream name: %s", stream_name_.c_str());
     ESP_LOGCONFIG("vban_rx", "  Idle timeout: %u ms", (unsigned) idle_timeout_ms_);
     ESP_LOGCONFIG("vban_rx", "  Socket: %s", sock_ >= 0 ? "OK" : "FAILED");
     ESP_LOGCONFIG("vban_rx", "  Raw packets received: %u", (unsigned) raw_packets_received_);
@@ -450,6 +455,9 @@ class VBANReceiver : public Component {
     ESP_LOGCONFIG("vban_rx", "  Packets lost:     %u", (unsigned) packets_lost_);
 	ESP_LOGCONFIG("vban_rx", "  Data overflows:   %u", (unsigned) data_overflows_);
     ESP_LOGCONFIG("vban_rx", "  Out of order:     %u", (unsigned) packets_out_of_order_);
+	ESP_LOGCONFIG("vban_rx", "  Playing: %s", playing() ? "YES" : "NO");
+    ESP_LOGCONFIG("vban_rx", "  Current stream name: %s", current_stream_name_.c_str());
+	ESP_LOGCONFIG("vban_rx", "  Current samplerate: %u", current_samplerate_);
   }
   
   bool playing() const { return !!audioOut; }
@@ -464,21 +472,21 @@ class VBANReceiver : public Component {
   void socketTask()
   {	  
 	sockBuff_.assign(2000, 0);
+	current_stream_name_.reserve(16);
 
 	struct sockaddr_in from;
     socklen_t fromlen = sizeof(from);
 
     for (;;) {
-      int n = ::recvfrom(sock_, sockBuff_.data(), sockBuff_.size(), 0,
-                        (struct sockaddr *)&from, &fromlen);
+      int n = ::recvfrom(sock_, sockBuff_.data(), sockBuff_.size(), 0, (struct sockaddr *)&from, &fromlen);
 						
 	  if (n >= 0) {
 		raw_packets_received_++;		
 		VBanPacket packet(sockBuff_.data(), n);
 		if (packet.checkValid())
-			handle_packet_(packet);
+		  handle_packet_(packet);
 		else
-			log_format_warning_("header", 0);
+		  log_format_warning_("header", 0);
 	  }
 	  else {
 	    if (errno == EINPROGRESS || errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -498,9 +506,10 @@ class VBANReceiver : public Component {
   }
  
   void handle_packet_(const VBanPacket &packet) {
-	  
-	if (packet.getProtocol() != VBanPacket::VBAN_PROTOCOL_AUDIO)
+	if (packet.getProtocol() != VBanPacket::VBAN_PROTOCOL_AUDIO) {
+	  log_format_warning_("protocol", (unsigned)packet.getProtocol());
 	  return;
+	}
 	if (packet.getBitrate() != VBanPacket::VBAN_BITFMT_16_INT) {
 	  log_format_warning_("format", (unsigned)packet.getBitrate());
 	  return;
@@ -509,18 +518,22 @@ class VBANReceiver : public Component {
 	  log_format_warning_("channels", packet.getNumChannels());
 	  return;
 	}
-	if (!packet.checkStreamName(stream_name_.c_str())) {
+	if (!stream_name_.empty() && !packet.checkStreamName(stream_name_.c_str())) {
 	  log_format_warning_("stream", 0);
 	  return;
 	}
+	if (!packet.checkStreamName(current_stream_name_.c_str()))
+	  packet.getStreamName(current_stream_name_);
 
 	unsigned sr = packet.getSampleRate();
 	if (audioOut) {
-		if (sr != audioOut->getRate())
-			audioOut->setRate(sr);
+	  if (sr != audioOut->getRate()) {
+		audioOut->setRate(sr);
+		current_samplerate_ = sr;
+	  }
 	}
 	else
-		start_playback_(sr);
+	  start_playback_(sr);
 
     uint32_t frame = packet.getFrameNum();
     if (packets_received_ > 0) {
@@ -542,61 +555,44 @@ class VBANReceiver : public Component {
 	int vbanNbr;
 	const int16_t *pcmSamples = packet.getSamplesData(&vbanNbr);
 	if ((vbanNbr & 1) == 0) {
-		for (; vbanNbr > 0; ) {
-			if (audioOut->consumeSample(pcmSamples)) {
-				vbanNbr -= 2;
-				pcmSamples += 2;
-			}
-			else {
-				data_overflows_++;
-				break;
-			}
+	  for (; vbanNbr > 0; ) {
+		if (audioOut->consumeSample(pcmSamples)) {
+		  vbanNbr -= 2;
+		  pcmSamples += 2;
 		}
-	}
-	
+		else {
+		  data_overflows_++;
+		  break;
+		}
+	  }
+	}	
   }
 
-  void ring_write_(const uint8_t *pcmData, size_t len) {	 
-	unsigned vbanNbr = len / 2;
-	const int16_t *pcmSamples = (const int16_t *)pcmData;
-	if (audioOut && vbanNbr > 0 && (vbanNbr & 1) == 0) {
-		for (; vbanNbr > 0; ) {
-			if (audioOut->consumeSample(pcmSamples)) {
-				vbanNbr -= 2;
-				pcmSamples += 2;
-			}
-			else {
-				data_overflows_++;
-				break;
-			}
-		}
-	}
-  }
 
   void log_format_warning_(const char *field, uint8_t value) {
     uint32_t now = millis();
     if (now - last_format_warning_ms_ < 1000) 
-		return;
+	  return;
     last_format_warning_ms_ = now;
 
-    ESP_LOGD("vban_rx", "Rejecting packet: unsupported %s=%u (expected mono PCM16 @ 16kHz)",
-             field, (unsigned) value);
+    ESP_LOGD("vban_rx", "Rejecting packet: unsupported %s=%u (expected mono PCM16 @ 16kHz)", field, (unsigned) value);
   }
 
   void start_playback_(unsigned sampleRate) {
-	//std::unique_ptr<AudioOutputI2S> i2s = std::make_unique<AudioOutputI2S>(GPIO_NUM_5, -1, GPIO_NUM_33, GPIO_NUM_17);
 	std::unique_ptr<AudioOutputI2S> i2s = std::make_unique<AudioOutputI2S>(dout_pin_, mclk_pin_, bclk_pin_, lrclk_pin_);
-	//(int dout_pin, int mclk_pin, int bclk_pin, int ws_pin)
-	i2s->setBuffers(16, 2*1024);
+	i2s->setBuffers(16, 2048);
+	i2s->setRate(sampleRate);
+	current_samplerate_ = sampleRate;
+	i2s->begin();
 	audioOut = std::move(i2s);
-	audioOut->setRate(sampleRate);
-	audioOut->begin();
 
-    ESP_LOGD("vban_rx", "Stream '%s' started", stream_name_.c_str());
+    ESP_LOGD("vban_rx", "Stream '%s' started", current_stream_name_.c_str());
   }
 
   void stop_playback_() {
 	audioOut = 0;
+	current_samplerate_ = 0;
+	current_stream_name_.resize(0);
     ESP_LOGD("vban_rx", "Stream idle");
   }
 
@@ -605,6 +601,7 @@ class VBANReceiver : public Component {
   std::vector<uint8_t> sockBuff_;
   uint16_t listen_port_{6980};
   std::string stream_name_;
+  std::string current_stream_name_;
   uint32_t idle_timeout_ms_{1500};
   uint32_t last_packet_ms_{0};
   uint32_t last_format_warning_ms_{0};
@@ -614,6 +611,7 @@ class VBANReceiver : public Component {
   uint32_t data_overflows_{0};
   uint32_t packets_out_of_order_{0};
   uint32_t last_frame_counter_{0};
+  uint32_t current_samplerate_{0};
   gpio_num_t dout_pin_{(gpio_num_t)-1}, mclk_pin_{(gpio_num_t)-1}, bclk_pin_{(gpio_num_t)-1}, lrclk_pin_{(gpio_num_t)-1};
 
 };
