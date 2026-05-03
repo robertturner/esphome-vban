@@ -397,10 +397,10 @@ class VBANReceiver : public Component {
   void set_listen_port(uint16_t port) { listen_port_ = port; }
   void set_stream_name(const std::string &name) { stream_name_ = name; }
   void set_idle_timeout_ms(uint32_t ms) { idle_timeout_ms_ = ms; }
-  void set_dout_pin(uint8_t dout_pin) { dout_pin_ = (gpio_num_t)dout_pin; }
-  void set_mclk_pin(uint8_t mclk_pin) { mclk_pin_ = (gpio_num_t)mclk_pin; }
-  void set_bclk_pin(uint8_t bclk_pin) { bclk_pin_ = (gpio_num_t)bclk_pin; }
-  void set_lrclk_pin(uint8_t lrclk_pin) { lrclk_pin_ = (gpio_num_t)lrclk_pin; }
+  void set_dout_pin(int dout_pin) { dout_pin_ = (gpio_num_t)dout_pin; }
+  void set_mclk_pin(int mclk_pin) { mclk_pin_ = (gpio_num_t)mclk_pin; }
+  void set_bclk_pin(int bclk_pin) { bclk_pin_ = (gpio_num_t)bclk_pin; }
+  void set_lrclk_pin(int lrclk_pin) { lrclk_pin_ = (gpio_num_t)lrclk_pin; }
 
   float get_setup_priority() const override { return setup_priority::AFTER_WIFI; }
 
@@ -614,7 +614,7 @@ class VBANReceiver : public Component {
   uint32_t data_overflows_{0};
   uint32_t packets_out_of_order_{0};
   uint32_t last_frame_counter_{0};
-  gpio_num_t dout_pin_{-1}, mclk_pin_{-1}, bclk_pin_{-1}, lrclk_pin_{-1};
+  gpio_num_t dout_pin_{(gpio_num_t)-1}, mclk_pin_{(gpio_num_t)-1}, bclk_pin_{(gpio_num_t)-1}, lrclk_pin_{(gpio_num_t)-1};
 
 };
 
