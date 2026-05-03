@@ -397,10 +397,10 @@ class VBANReceiver : public Component {
   void set_listen_port(uint16_t port) { listen_port_ = port; }
   void set_stream_name(const std::string &name) { stream_name_ = name; }
   void set_idle_timeout_ms(uint32_t ms) { idle_timeout_ms_ = ms; }
-  void set_dout_pin(gpio_num_t dout_pin) { dout_pin_ = dout_pin; }
-  void set_mclk_pin(gpio_num_t mclk_pin) { mclk_pin_ = mclk_pin; }
-  void set_bclk_pin(gpio_num_t bclk_pin) { bclk_pin_ = bclk_pin; }
-  void set_lrclk_pin(gpio_num_t lrclk_pin) { lrclk_pin_ = lrclk_pin; }
+  void set_dout_pin(uint8_t dout_pin) { dout_pin_ = (gpio_num_t)dout_pin; }
+  void set_mclk_pin(uint8_t mclk_pin) { mclk_pin_ = (gpio_num_t)mclk_pin; }
+  void set_bclk_pin(uint8_t bclk_pin) { bclk_pin_ = (gpio_num_t)bclk_pin; }
+  void set_lrclk_pin(uint8_t lrclk_pin) { lrclk_pin_ = (gpio_num_t)lrclk_pin; }
 
   float get_setup_priority() const override { return setup_priority::AFTER_WIFI; }
 
