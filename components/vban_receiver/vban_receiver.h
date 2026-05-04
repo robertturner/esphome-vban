@@ -30,6 +30,8 @@ public:
     virtual bool setRate(int hz) = 0;
     virtual int getRate() const = 0;
 
+	virtual bool isRunning() const = 0;
+
     virtual bool begin(std::function<void(i2s_chan_handle_t)> initCallback = 0) = 0;
     virtual bool consumeSample(const int16_t sample[2]) = 0;
     virtual bool stop() = 0;
@@ -79,7 +81,7 @@ public:
 		return true;
 	}
     int getRate() const override { return hertz; }
-	bool isRunning() const { return i2sOn; }
+	bool isRunning() const override { return i2sOn; }
 
     bool begin(std::function<void(i2s_chan_handle_t)> initCallback = 0) override {
 		if (i2sOn)
