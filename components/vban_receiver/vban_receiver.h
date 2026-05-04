@@ -79,6 +79,7 @@ public:
 		return true;
 	}
     int getRate() const override { return hertz; }
+	bool isRunning() const { return i2sOn; }
 
     bool begin(std::function<void(i2s_chan_handle_t)> initCallback = 0) override {
 		if (i2sOn)
@@ -464,7 +465,7 @@ class VBANReceiver : public Component {
 	ESP_LOGCONFIG("vban_rx", "  Current samplerate: %u", current_samplerate_);
   }
   
-  bool playing() const { return !!audioOut; }
+  bool playing() const { return audioOut && audioOut->isRunning(); }
 
  protected:
  
@@ -530,7 +531,7 @@ class VBANReceiver : public Component {
 	  packet.getStreamName(current_stream_name_);
 
 	unsigned sr = packet.getSampleRate();
-	if (audioOut) {
+	if (playing()) {
 	  if (sr != audioOut->getRate()) {
 		audioOut->setRate(sr);
 		current_samplerate_ = sr;
@@ -583,18 +584,20 @@ class VBANReceiver : public Component {
   }
 
   void start_playback_(unsigned sampleRate) {
-	std::unique_ptr<AudioOutputI2S> i2s = std::make_unique<AudioOutputI2S>(dout_pin_, mclk_pin_, bclk_pin_, lrclk_pin_);
-	i2s->setBuffers(16, 2048);
-	i2s->setRate(sampleRate);
+	if (!audioOut) {
+		std::unique_ptr<AudioOutputI2S> i2s = std::make_unique<AudioOutputI2S>(dout_pin_, mclk_pin_, bclk_pin_, lrclk_pin_);
+		i2s->setBuffers(16, 2048);
+		audioOut = std::move(i2s);
+	}
+	audioOut->setRate(sampleRate);
 	current_samplerate_ = sampleRate;
-	i2s->begin();
-	audioOut = std::move(i2s);
+	audioOut->begin();
 
     ESP_LOGD("vban_rx", "Stream '%s' started", current_stream_name_.c_str());
   }
 
   void stop_playback_() {
-	audioOut = 0;
+	audioOut.stop();
 	current_samplerate_ = 0;
 	current_stream_name_.resize(0);
     ESP_LOGD("vban_rx", "Stream idle");
