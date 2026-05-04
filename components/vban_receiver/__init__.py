@@ -8,11 +8,9 @@ from esphome.components.esp32 import (
 )
 
 import esphome.config_validation as cv
-#from esphome.components import speaker
 from esphome.const import CONF_ID
 
 CODEOWNERS = ["@robertturner"]
-#DEPENDENCIES = ["network", "speaker"]
 DEPENDENCIES = ["network", "esp32"]
 
 AUTO_LOAD = ["socket"]
@@ -32,6 +30,7 @@ CONF_I2S_LRCLK_PIN = "i2s_lrclk_pin"
 
 def _consume_sockets(config):
     """Register socket needs for this component."""
+    from esphome.components import socket
     socket.consume_sockets(1, "vban_receiver")(config)
     return config
 
