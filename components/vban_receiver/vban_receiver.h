@@ -599,7 +599,7 @@ class VBANReceiver : public Component {
   }
 
   void stop_playback_() {
-	audioOut.stop();
+	audioOut->stop();
 	current_samplerate_ = 0;
 	current_stream_name_.resize(0);
     ESP_LOGD("vban_rx", "Stream idle");
