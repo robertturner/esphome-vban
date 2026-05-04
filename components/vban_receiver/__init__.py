@@ -58,11 +58,9 @@ async def to_code(config):
     
     add_idf_sdkconfig_option("CONFIG_I2S_ISR_IRAM_SAFE", True)
 
-    #spk = await cg.get_variable(config[CONF_SPEAKER])
-    #cg.add(var.set_speaker(spk))
-
     cg.add(var.set_listen_port(config[CONF_LISTEN_PORT]))
-    cg.add(var.set_stream_name(config[CONF_STREAM_NAME]))
+    if CONF_STREAM_NAME in config:
+        cg.add(var.set_stream_name(config[CONF_STREAM_NAME]))
     cg.add(var.set_idle_timeout_ms(config[CONF_IDLE_TIMEOUT_MS]))
     cg.add(var.set_dout_pin(config[CONF_I2S_DOUT_PIN]))
     if CONF_I2S_MCLK_PIN in config:
