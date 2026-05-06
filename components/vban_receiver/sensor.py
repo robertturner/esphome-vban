@@ -2,7 +2,6 @@ import esphome.codegen as cg
 from esphome.components import sensor
 import esphome.config_validation as cv
 from esphome.const import (
-    CONF_SAMPLERATE,
     UNIT_HERTZ,
 )
 
@@ -10,6 +9,9 @@ from . import (  # noqa: F401  pylint: disable=unused-import
     CONF_VBANRECEIVER_ID,
     VBANReceiver,
 )
+
+
+CONF_SAMPLERATE = "samplerate"
 
 DEPENDENCIES = ["vban_receiver"]
 
