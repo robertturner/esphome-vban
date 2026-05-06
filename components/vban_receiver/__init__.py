@@ -15,6 +15,7 @@ DEPENDENCIES = ["network", "esp32"]
 
 AUTO_LOAD = ["socket"]
 
+CONF_VBANRECEIVER_ID = "vban_receiver_id"
 vban_receiver_ns = cg.esphome_ns.namespace("vban_receiver")
 VBANReceiver = vban_receiver_ns.class_("VBANReceiver", cg.Component)
 

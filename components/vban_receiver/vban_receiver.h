@@ -1,12 +1,17 @@
 #pragma once
 #include "esphome.h"
-//#include "esphome/components/speaker/speaker.h"
 #include <driver/i2s_std.h>
+
+#ifdef USE_SENSOR
+#include "esphome/components/sensor/sensor.h"
+#endif
+#ifdef USE_TEXT_SENSOR
+#include "esphome/components/text_sensor/text_sensor.h"
+#endif
 
 #include <lwip/sockets.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
-//#include "FreeRTOS.h"
 
 #include <functional>
 #include <stdint.h>
@@ -411,6 +416,13 @@ class VBANReceiver : public Component {
   void set_mclk_pin(int mclk_pin) { mclk_pin_ = (gpio_num_t)mclk_pin; }
   void set_bclk_pin(int bclk_pin) { bclk_pin_ = (gpio_num_t)bclk_pin; }
   void set_lrclk_pin(int lrclk_pin) { lrclk_pin_ = (gpio_num_t)lrclk_pin; }
+#ifdef USE_TEXT_SENSOR
+  void set_streamname_sensor(text_sensor::TextSensor *streamname_info) { streamname_info_ = streamname_info; }
+#endif  // USE_TEXT_SENSOR
+#ifdef USE_SENSOR
+  void set_samplerate_sensor(sensor::Sensor *samplerate_info) { samplerate_info_ = samplerate_info; }
+#endif  // USE_SENSOR
+
 
   float get_setup_priority() const override { return setup_priority::AFTER_WIFI; }
 
@@ -623,6 +635,12 @@ class VBANReceiver : public Component {
   uint32_t current_samplerate_{0};
   gpio_num_t dout_pin_{(gpio_num_t)-1}, mclk_pin_{(gpio_num_t)-1}, bclk_pin_{(gpio_num_t)-1}, lrclk_pin_{(gpio_num_t)-1};
 
+#ifdef USE_TEXT_SENSOR
+  text_sensor::TextSensor *streamname_info_{nullptr};
+#endif // USE_TEXT_SENSOR  
+#ifdef USE_SENSOR
+  sensor::Sensor *samplerate_info_{nullptr};
+#endif // USE_SENSOR  
 };
 
 }  // namespace vban_receiver
