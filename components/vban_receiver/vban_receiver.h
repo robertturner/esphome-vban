@@ -541,18 +541,23 @@ class VBANReceiver : public Component {
 	  log_format_warning_("stream", 0);
 	  return;
 	}
-	if (!packet.checkStreamName(current_stream_name_.c_str()))
+	if (!packet.checkStreamName(current_stream_name_.c_str())) {
 	  packet.getStreamName(current_stream_name_);
+	  streamname_info_->publish_state(current_stream_name_);
+	}
 
 	unsigned sr = packet.getSampleRate();
 	if (playing()) {
 	  if (sr != audioOut->getRate()) {
 		audioOut->setRate(sr);
 		current_samplerate_ = sr;
+		samplerate_info_->publish_state(sr);
 	  }
 	}
-	else
+	else {
 	  start_playback_(sr);
+	  samplerate_info_->publish_state(sr);
+	}
 
     uint32_t frame = packet.getFrameNum();
     if (packets_received_ > 0) {
@@ -614,6 +619,8 @@ class VBANReceiver : public Component {
 	audioOut->stop();
 	current_samplerate_ = 0;
 	current_stream_name_.resize(0);
+	streamname_info_->publish_state(current_stream_name_);
+	samplerate_info_->publish_state(0);
     ESP_LOGD("vban_rx", "Stream idle");
   }
 
