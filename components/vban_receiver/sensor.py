@@ -11,7 +11,7 @@ from . import (  # noqa: F401  pylint: disable=unused-import
 )
 
 
-CONF_SAMPLERATE = "samplerate"
+CONF_SAMPLERATE = "sample_rate"
 
 DEPENDENCIES = ["vban_receiver"]
 
