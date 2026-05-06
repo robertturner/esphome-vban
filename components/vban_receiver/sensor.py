@@ -21,7 +21,7 @@ CONFIG_SCHEMA = {
         unit_of_measurement=UNIT_HERTZ,
         icon="mdi:speedometer",
         accuracy_decimals=0,
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+        entity_category="diagnostic",
     ),
 }
 
