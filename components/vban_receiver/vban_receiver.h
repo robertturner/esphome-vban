@@ -419,7 +419,7 @@ class VBANReceiver : public Component {
   void set_lrclk_pin(int lrclk_pin) { lrclk_pin_ = (gpio_num_t)lrclk_pin; }
 #ifdef USE_TEXT_SENSOR
   void set_streamname_sensor(text_sensor::TextSensor *streamname_info) { streamname_info_ = streamname_info; }
-  void set_src_ip_sensor(text_sensor::TextSensor *src_ip_info) { src_ip_ = src_ip_info; }
+  void set_src_ip_sensor(text_sensor::TextSensor *src_ip_info) { src_ip_info_ = src_ip_info; }
 #endif  // USE_TEXT_SENSOR
 #ifdef USE_SENSOR
   void set_samplerate_sensor(sensor::Sensor *samplerate_info) { samplerate_info_ = samplerate_info; }
@@ -645,8 +645,8 @@ class VBANReceiver : public Component {
   void update_current_src_ip(network::IPAddress current_src_ip) {
 	  current_src_ip_ = std::move(current_src_ip);
 	  if (src_ip_info_) {
-		char buf[IP_ADDRESS_BUFFER_SIZE+1];
-		current_src_ip_->str_to(buf);
+		char buf[network::IP_ADDRESS_BUFFER_SIZE];
+		current_src_ip_.str_to(buf);
 		src_ip_info_->publish_state(buf);
 	  }
   }
