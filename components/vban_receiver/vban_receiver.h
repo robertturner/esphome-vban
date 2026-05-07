@@ -419,6 +419,7 @@ class VBANReceiver : public Component {
   void set_lrclk_pin(int lrclk_pin) { lrclk_pin_ = (gpio_num_t)lrclk_pin; }
 #ifdef USE_TEXT_SENSOR
   void set_streamname_sensor(text_sensor::TextSensor *streamname_info) { streamname_info_ = streamname_info; }
+  void set_src_ip_sensor(text_sensor::TextSensor *src_ip_info) { src_ip_ = src_ip_info; }
 #endif  // USE_TEXT_SENSOR
 #ifdef USE_SENSOR
   void set_samplerate_sensor(sensor::Sensor *samplerate_info) { samplerate_info_ = samplerate_info; }
@@ -502,11 +503,16 @@ class VBANReceiver : public Component {
 						
 	  if (n >= 0) {
 		raw_packets_received_++;
+		network::IPAddress from_ip((ip_addr_t*)&from.sin_addr.s_addr);
 
-		if (!src_ip_.is_set() || src_ip_ == network::IPAddress((ip_addr_t*)&from.sin_addr.s_addr)) {
+		if (!src_ip_.is_set() || src_ip_ == from_ip) {
 		  VBanPacket packet(sockBuff_.data(), n);
-		  if (packet.checkValid())
-		    handle_packet_(packet);
+		  if (packet.checkValid()) {
+		    if (handle_packet_(packet)) {
+			  if (from_ip != current_src_ip_)
+				update_current_src_ip(std::move(from_ip));
+			}
+		  }
 		  else
 		    log_format_warning_("header", 0);
 		}
@@ -528,42 +534,40 @@ class VBANReceiver : public Component {
 	vTaskDelete(0);
   }
  
-  void handle_packet_(const VBanPacket &packet) {
+  bool handle_packet_(const VBanPacket &packet) {
 	if (packet.getProtocol() != VBanPacket::VBAN_PROTOCOL_AUDIO) {
 	  log_format_warning_("protocol", (unsigned)packet.getProtocol());
-	  return;
+	  return false;
 	}
 	if (packet.getBitrate() != VBanPacket::VBAN_BITFMT_16_INT) {
 	  log_format_warning_("format", (unsigned)packet.getBitrate());
-	  return;
+	  return false;
 	}
 	if (packet.getNumChannels() != 2) {
 	  log_format_warning_("channels", packet.getNumChannels());
-	  return;
+	  return false;
 	}
 	if (!stream_name_.empty() && !packet.checkStreamName(stream_name_.c_str())) {
 	  log_format_warning_("stream", 0);
-	  return;
+	  return false;
 	}
 	if (!packet.checkStreamName(current_stream_name_.c_str())) {
 	  packet.getStreamName(current_stream_name_);
 	  if (streamname_info_)
 		streamname_info_->publish_state(current_stream_name_);
 	}
+	
 
 	unsigned sr = packet.getSampleRate();
 	if (playing()) {
 	  if (sr != audioOut->getRate()) {
 		audioOut->setRate(sr);
-		current_samplerate_ = sr;
-		if (samplerate_info_)
-			samplerate_info_->publish_state(sr);
+		update_current_samplerate(sr);
 	  }
 	}
 	else {
 	  start_playback_(sr);
-	  if (samplerate_info_)
-		samplerate_info_->publish_state(sr);
+	  update_current_samplerate(sr);
 	}
 
     uint32_t frame = packet.getFrameNum();
@@ -596,7 +600,8 @@ class VBANReceiver : public Component {
 		  break;
 		}
 	  }
-	}	
+	}
+	return true;
   }
 
 
@@ -616,7 +621,6 @@ class VBANReceiver : public Component {
 		audioOut = std::move(i2s);
 	}
 	audioOut->setRate(sampleRate);
-	current_samplerate_ = sampleRate;
 	audioOut->begin();
 
     ESP_LOGD("vban_rx", "Stream '%s' started", current_stream_name_.c_str());
@@ -624,13 +628,27 @@ class VBANReceiver : public Component {
 
   void stop_playback_() {
 	audioOut->stop();
-	current_samplerate_ = 0;
+	update_current_src_ip(network::IPAddress{});
 	current_stream_name_.resize(0);
 	if (streamname_info_)
-		streamname_info_->publish_state(current_stream_name_);
-	if (samplerate_info_)
-		samplerate_info_->publish_state(0);
+	  streamname_info_->publish_state(current_stream_name_);
+	update_current_samplerate(0);
     ESP_LOGD("vban_rx", "Stream idle");
+  }
+  
+  void update_current_samplerate(uint32_t sr) {
+	current_samplerate_ = sr;
+	if (samplerate_info_)
+	  samplerate_info_->publish_state(current_samplerate_);
+  }
+  
+  void update_current_src_ip(network::IPAddress current_src_ip) {
+	  current_src_ip_ = std::move(current_src_ip);
+	  if (src_ip_info_) {
+		char buf[IP_ADDRESS_BUFFER_SIZE+1];
+		current_src_ip_->str_to(buf);
+		src_ip_info_->publish_state(buf);
+	  }
   }
 
   std::unique_ptr<AudioOutput> audioOut;
@@ -638,8 +656,9 @@ class VBANReceiver : public Component {
   std::vector<uint8_t> sockBuff_;
   uint16_t listen_port_{6980};
   std::string stream_name_;
-  network::IPAddress src_ip_;
   std::string current_stream_name_;
+  network::IPAddress src_ip_;
+  network::IPAddress current_src_ip_;
   uint32_t idle_timeout_ms_{1500};
   uint32_t last_packet_ms_{0};
   uint32_t last_format_warning_ms_{0};
@@ -654,6 +673,7 @@ class VBANReceiver : public Component {
 
 #ifdef USE_TEXT_SENSOR
   text_sensor::TextSensor *streamname_info_{nullptr};
+  text_sensor::TextSensor *src_ip_info_{nullptr};
 #endif // USE_TEXT_SENSOR  
 #ifdef USE_SENSOR
   sensor::Sensor *samplerate_info_{nullptr};

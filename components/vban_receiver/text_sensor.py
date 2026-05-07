@@ -10,11 +10,16 @@ from . import (  # noqa: F401  pylint: disable=unused-import
 DEPENDENCIES = ["vban_receiver"]
 
 CONF_STREAM_NAME = "stream_name"
+CONF_SRC_IP = "src_ip"
 
 CONFIG_SCHEMA = cv.Schema(
     {
         cv.GenerateID(CONF_VBANRECEIVER_ID): cv.use_id(VBANReceiver),
         cv.Optional(CONF_STREAM_NAME): text_sensor.text_sensor_schema(
+            icon="mdi:radio_tower",
+            entity_category="diagnostic",
+        ),
+        cv.Optional(CONF_SRC_IP): text_sensor.text_sensor_schema(
             icon="mdi:radio_tower",
             entity_category="diagnostic",
         ),
@@ -28,4 +33,7 @@ async def to_code(config):
     if CONF_STREAM_NAME in config:
         sens = await text_sensor.new_text_sensor(config[CONF_STREAM_NAME])
         cg.add(vban_receiver_component.set_streamname_sensor(sens))
+    if CONF_SRC_IP in config:
+        sens = await text_sensor.new_text_sensor(config[CONF_SRC_IP])
+        cg.add(vban_receiver_component.set_src_ip_sensor(sens))
 
