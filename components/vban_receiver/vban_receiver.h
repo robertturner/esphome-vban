@@ -503,7 +503,7 @@ class VBANReceiver : public Component {
 	  if (n >= 0) {
 		raw_packets_received_++;
 
-		if (!src_ip_.is_set() || src_ip_ == network::IPAddress(from.sin_addr.s_addr)) {
+		if (!src_ip_.is_set() || src_ip_ == network::IPAddress((ip_addr_t*)&from.sin_addr.s_addr)) {
 		  VBanPacket packet(sockBuff_.data(), n);
 		  if (packet.checkValid())
 		    handle_packet_(packet);
