@@ -1,6 +1,8 @@
 from esphome import pins
 import esphome.codegen as cg
 
+from esphome.components import socket
+
 from esphome.components.esp32 import (
     add_idf_sdkconfig_option,
     get_esp32_variant,
@@ -22,6 +24,7 @@ VBANReceiver = vban_receiver_ns.class_("VBANReceiver", cg.Component)
 #CONF_SPEAKER = "speaker"
 CONF_LISTEN_PORT = "listen_port"
 CONF_STREAM_NAME = "stream_name"
+CONF_SRC_IP = "src_ip"
 CONF_IDLE_TIMEOUT_MS = "idle_timeout_ms"
 
 CONF_I2S_DOUT_PIN = "i2s_dout_pin"
@@ -41,6 +44,7 @@ CONFIG_SCHEMA = cv.All(
         #cv.Required(CONF_SPEAKER): cv.use_id(speaker.Speaker),
         cv.Optional(CONF_LISTEN_PORT, default=6980): cv.port,
         cv.Optional(CONF_STREAM_NAME): cv.All(cv.string, cv.Length(max=16)),
+        cv.Optional(CONF_SRC_IP): cv.string),
         cv.Optional(CONF_IDLE_TIMEOUT_MS, default=1500): cv.positive_int,
         cv.Required(CONF_I2S_DOUT_PIN): pins.internal_gpio_output_pin_number,
         cv.Optional(CONF_I2S_MCLK_PIN): pins.internal_gpio_output_pin_number,
@@ -62,6 +66,8 @@ async def to_code(config):
     cg.add(var.set_listen_port(config[CONF_LISTEN_PORT]))
     if CONF_STREAM_NAME in config:
         cg.add(var.set_stream_name(config[CONF_STREAM_NAME]))
+    if CONF_SRC_IP in config:
+        cg.add(var.set_src_ip(config[CONF_SRC_IP]))
     cg.add(var.set_idle_timeout_ms(config[CONF_IDLE_TIMEOUT_MS]))
     cg.add(var.set_dout_pin(config[CONF_I2S_DOUT_PIN]))
     if CONF_I2S_MCLK_PIN in config:

@@ -410,7 +410,8 @@ private:
 class VBANReceiver : public Component {
  public: 
   void set_listen_port(uint16_t port) { listen_port_ = port; }
-  void set_stream_name(const std::string &name) { stream_name_ = name; }
+  void set_stream_name(const std::string name) { stream_name_ = std::move(name); }
+  void set_src_ip(const std::string src_ip) { src_ip_ = network::IPAddress(src_ip); }
   void set_idle_timeout_ms(uint32_t ms) { idle_timeout_ms_ = ms; }
   void set_dout_pin(int dout_pin) { dout_pin_ = (gpio_num_t)dout_pin; }
   void set_mclk_pin(int mclk_pin) { mclk_pin_ = (gpio_num_t)mclk_pin; }
@@ -500,12 +501,15 @@ class VBANReceiver : public Component {
       int n = ::recvfrom(sock_, sockBuff_.data(), sockBuff_.size(), 0, (struct sockaddr *)&from, &fromlen);
 						
 	  if (n >= 0) {
-		raw_packets_received_++;		
-		VBanPacket packet(sockBuff_.data(), n);
-		if (packet.checkValid())
-		  handle_packet_(packet);
-		else
-		  log_format_warning_("header", 0);
+		raw_packets_received_++;
+
+		if (!src_ip_.is_set() || src_ip_ == network::IPAddress(from.sin_addr.s_addr)) {
+		  VBanPacket packet(sockBuff_.data(), n);
+		  if (packet.checkValid())
+		    handle_packet_(packet);
+		  else
+		    log_format_warning_("header", 0);
+		}
 	  }
 	  else {
 	    if (errno == EINPROGRESS || errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -634,6 +638,7 @@ class VBANReceiver : public Component {
   std::vector<uint8_t> sockBuff_;
   uint16_t listen_port_{6980};
   std::string stream_name_;
+  network::IPAddress src_ip_;
   std::string current_stream_name_;
   uint32_t idle_timeout_ms_{1500};
   uint32_t last_packet_ms_{0};
