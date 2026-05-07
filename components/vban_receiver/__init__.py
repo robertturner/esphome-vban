@@ -44,7 +44,7 @@ CONFIG_SCHEMA = cv.All(
         #cv.Required(CONF_SPEAKER): cv.use_id(speaker.Speaker),
         cv.Optional(CONF_LISTEN_PORT, default=6980): cv.port,
         cv.Optional(CONF_STREAM_NAME): cv.All(cv.string, cv.Length(max=16)),
-        cv.Optional(CONF_SRC_IP): cv.string),
+        cv.Optional(CONF_SRC_IP): cv.string,
         cv.Optional(CONF_IDLE_TIMEOUT_MS, default=1500): cv.positive_int,
         cv.Required(CONF_I2S_DOUT_PIN): pins.internal_gpio_output_pin_number,
         cv.Optional(CONF_I2S_MCLK_PIN): pins.internal_gpio_output_pin_number,
