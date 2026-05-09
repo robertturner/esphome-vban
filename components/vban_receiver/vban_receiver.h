@@ -700,6 +700,7 @@ class VBANReceiver : public Component {
   void set_stream_name(const std::string name) { stream_name_ = std::move(name); }
   void set_src_ip(const std::string src_ip) { src_ip_ = network::IPAddress(src_ip); }
   void set_idle_timeout_ms(uint32_t ms) { idle_timeout_ms_ = ms; }
+  void set_spdif_mode(bool spdif_mode) { spdif_mode_ = spdif_mode; }
   void set_dout_pin(int dout_pin) { dout_pin_ = (gpio_num_t)dout_pin; }
   void set_mclk_pin(int mclk_pin) { mclk_pin_ = (gpio_num_t)mclk_pin; }
   void set_bclk_pin(int bclk_pin) { bclk_pin_ = (gpio_num_t)bclk_pin; }
@@ -903,9 +904,16 @@ class VBANReceiver : public Component {
 
   void start_playback_(unsigned sampleRate) {
 	if (!audioOut) {
-		std::unique_ptr<AudioOutputI2S> i2s = std::make_unique<AudioOutputI2S>(dout_pin_, mclk_pin_, bclk_pin_, lrclk_pin_);
-		i2s->setBuffers(16, 2048);
-		audioOut = std::move(i2s);
+		if (spdif_mode_) {
+			std::unique_ptr<AudioOutputSPDIF> spdif = std::make_unique<AudioOutputSPDIF>(dout_pin_);
+			spdif->setBuffers(16, 2*2048);
+			audioOut = std::move(spdif);
+		}
+		else {
+			std::unique_ptr<AudioOutputI2S> i2s = std::make_unique<AudioOutputI2S>(dout_pin_, mclk_pin_, bclk_pin_, lrclk_pin_);
+			i2s->setBuffers(16, 2048);
+			audioOut = std::move(i2s);
+		}
 	}
 	audioOut->setRate(sampleRate);
 	audioOut->begin();
@@ -946,6 +954,7 @@ class VBANReceiver : public Component {
   std::string current_stream_name_;
   network::IPAddress src_ip_;
   network::IPAddress current_src_ip_;
+  bool spdif_mode_;
   uint32_t idle_timeout_ms_{1500};
   uint32_t last_packet_ms_{0};
   uint32_t last_format_warning_ms_{0};

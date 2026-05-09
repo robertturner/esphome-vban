@@ -27,6 +27,8 @@ CONF_STREAM_NAME = "stream_name"
 CONF_SRC_IP = "src_ip"
 CONF_IDLE_TIMEOUT_MS = "idle_timeout_ms"
 
+CONF_SPDIF_MODE = "spdif_mode"
+
 CONF_I2S_DOUT_PIN = "i2s_dout_pin"
 CONF_I2S_MCLK_PIN = "i2s_mclk_pin"
 CONF_I2S_BCLK_PIN = "i2s_bclk_pin"
@@ -45,6 +47,7 @@ CONFIG_SCHEMA = cv.All(
         cv.Optional(CONF_LISTEN_PORT, default=6980): cv.port,
         cv.Optional(CONF_STREAM_NAME): cv.All(cv.string, cv.Length(max=16)),
         cv.Optional(CONF_SRC_IP): cv.string,
+        cv.Optional(CONF_SPDIF_MODE): cv.boolean,
         cv.Optional(CONF_IDLE_TIMEOUT_MS, default=1500): cv.positive_int,
         cv.Required(CONF_I2S_DOUT_PIN): pins.internal_gpio_output_pin_number,
         cv.Optional(CONF_I2S_MCLK_PIN): pins.internal_gpio_output_pin_number,
@@ -69,6 +72,8 @@ async def to_code(config):
     if CONF_SRC_IP in config:
         cg.add(var.set_src_ip(config[CONF_SRC_IP]))
     cg.add(var.set_idle_timeout_ms(config[CONF_IDLE_TIMEOUT_MS]))
+    if CONF_SPDIF_MODE in config
+        cg.add(var.set_spdif_mode(config[CONF_SPDIF_MODE]))
     cg.add(var.set_dout_pin(config[CONF_I2S_DOUT_PIN]))
     if CONF_I2S_MCLK_PIN in config:
         cg.add(var.set_mclk_pin(config[CONF_I2S_MCLK_PIN]))
