@@ -72,7 +72,7 @@ async def to_code(config):
     if CONF_SRC_IP in config:
         cg.add(var.set_src_ip(config[CONF_SRC_IP]))
     cg.add(var.set_idle_timeout_ms(config[CONF_IDLE_TIMEOUT_MS]))
-    if CONF_SPDIF_MODE in config
+    if CONF_SPDIF_MODE in config:
         cg.add(var.set_spdif_mode(config[CONF_SPDIF_MODE]))
     cg.add(var.set_dout_pin(config[CONF_I2S_DOUT_PIN]))
     if CONF_I2S_MCLK_PIN in config:
