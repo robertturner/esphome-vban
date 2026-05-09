@@ -239,6 +239,8 @@ public:
 		return true;
 	}
     int getRate() const override { return hertz; }
+	
+	bool isRunning() const override { return i2sOn; }
 
     bool begin(std::function<void(i2s_chan_handle_t)> initCallback = 0) override {
 		if (i2sOn)
