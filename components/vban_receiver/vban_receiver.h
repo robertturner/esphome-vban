@@ -324,7 +324,25 @@ protected:
     const uint32_t VUCP_PREAMBLE_W = 0xCCE40000; // 11001100 11100100
 
     inline int AdjustI2SRate(int hz) { return 2 * hz; }
-    void buildChannelStatusBits(int sampleRate);
+    void buildChannelStatusBits(int sampleRate) {
+		memset(channel_status_, 0, sizeof(channel_status_));
+		uint8_t freq_code;
+		switch (sampleRate) 
+		{
+		case 44100:
+			freq_code = 0x0;  // 0000
+			break;
+		case 48000:
+			freq_code = 0x2;  // 0010
+			break;
+		default:
+			// Other values are possible but they're not supported by ESPHome
+			freq_code = 0x1;  // 0001 = not indicated
+			break;
+		}
+		// Byte 3: freq_code in bits 0-3, clock accuracy (00) in bits 4-5
+		channel_status_[3] = freq_code;  // Clock accuracy bits 4-5 are already 0
+	}
     inline bool getChannelStatusBit(uint8_t frame) const { return (channel_status_[frame >> 3] >> (frame & 7)) & 1; }
 	
 	void encodeSample(uint32_t dest[2], int16_t sample, bool isLeftChannel, uint8_t &frameInBlock) const
