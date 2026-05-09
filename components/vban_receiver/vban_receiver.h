@@ -46,8 +46,8 @@ protected:
     i2s_chan_handle_t _tx_handle;
 };
 
-static constexpr uint32_t I2S_DMA_BUF_COUNT_DEFAULT  = 8;
-static constexpr uint32_t I2S_DMA_BUF_SIZE_DEFAULT   = 256;
+static constexpr int I2S_DMA_BUF_COUNT_DEFAULT  = 8;
+static constexpr int I2S_DMA_BUF_SIZE_DEFAULT   = 256;
 
 class AudioOutputI2S : public AudioOutput
 {
@@ -160,18 +160,57 @@ private:
     size_t _bufferWords;
 };
 
+static constexpr int SPDIF_DMA_BUF_COUNT_DEFAULT = 8;
+static constexpr int SPDIF_DMA_BUF_SIZE_DEFAULT = 256;
+
+// Constexpr BMC encoder for compile-time LUT generation.
+// Encodes with start phase=true (HIGH). The complement property allows phase=false
+// via XOR: bmc_encode(v, N, false) == bmc_encode(v, N, true) ^ mask
+static constexpr uint16_t bmc_lut_encode(uint32_t data, uint8_t num_bits) 
+{
+	uint16_t bmc = 0;
+	bool phase = true;
+	for (uint8_t i = 0; i < num_bits; i++) 
+	{
+		bool bit = (data >> i) & 1;
+		uint8_t bmc_pair = phase ? (bit ? 0b01 : 0b00) : (bit ? 0b10 : 0b11);
+		bmc |= static_cast<uint16_t>(bmc_pair) << ((num_bits - 1 - i) * 2);
+		if (!bit)
+			phase = !phase;
+	}
+	return bmc;
+}
+
+static constexpr auto BMC_LUT_4 = [] 
+{
+	std::array<uint8_t, 16> t{};
+	for (uint32_t i = 0; i < 16; i++)
+		t[i] = static_cast<uint8_t>(bmc_lut_encode(i, 4));
+	return t;
+}();
+// 8-bit BMC lookup table: 256 entries (512 bytes in flash)
+// Index: 8-bit data value (0-255), always phase=true start
+static constexpr auto BMC_LUT_8 = [] 
+{
+	std::array<uint16_t, 256> t{};
+	for (uint32_t i = 0; i < 256; i++)
+		t[i] = bmc_lut_encode(i, 8);
+	return t;
+}();
+
+
 class AudioOutputSPDIF : public AudioOutput
 {
 public:
-    AudioOutputSPDIF(int dout_pin = SPDIF_OUT_PIN_DEFAULT) : hertz(48000),
-                                                    i2sOn(false),
-                                                    doutPin(dout_pin),
-                                                    frame_num(0)
+    AudioOutputSPDIF(int dout_pin) : hertz(48000),
+									i2sOn(false),
+									doutPin(dout_pin),
+									frame_num(0)
 	{ }
     
     virtual ~AudioOutputSPDIF() { stop(); }
     
-    bool setBuffers(int dmaBuffers = SPDIF_DMA_BUF_COUNT_DEFAULT, int dmaBufferBytes = SPDIF_DMA_BUF_SIZE_DEFAULT * 4) {
+    bool setBuffers(int dmaBufferCount = SPDIF_DMA_BUF_COUNT_DEFAULT, int dmaBufferBytes = SPDIF_DMA_BUF_SIZE_DEFAULT * 4) {
 		if (i2sOn || (dmaBufferCount < 3) || (dmaBufferBytes & 3))
 			return false;
 		_buffers = dmaBufferCount;
@@ -284,44 +323,8 @@ protected:
 
     inline int AdjustI2SRate(int hz) { return 2 * hz; }
     void buildChannelStatusBits(int sampleRate);
-    inline bool getChannelStatusBit(uint8_t frame) { return (channel_status_[frame >> 3] >> (frame & 7)) & 1; }
+    inline bool getChannelStatusBit(uint8_t frame) const { return (channel_status_[frame >> 3] >> (frame & 7)) & 1; }
 	
-	
-	// Constexpr BMC encoder for compile-time LUT generation.
-	// Encodes with start phase=true (HIGH). The complement property allows phase=false
-	// via XOR: bmc_encode(v, N, false) == bmc_encode(v, N, true) ^ mask
-	static constexpr uint16_t bmc_lut_encode(uint32_t data, uint8_t num_bits) 
-	{
-		uint16_t bmc = 0;
-		bool phase = true;
-		for (uint8_t i = 0; i < num_bits; i++) 
-		{
-			bool bit = (data >> i) & 1;
-			uint8_t bmc_pair = phase ? (bit ? 0b01 : 0b00) : (bit ? 0b10 : 0b11);
-			bmc |= static_cast<uint16_t>(bmc_pair) << ((num_bits - 1 - i) * 2);
-			if (!bit)
-				phase = !phase;
-		}
-		return bmc;
-	}
-
-	static constexpr auto BMC_LUT_4 = [] 
-	{
-		std::array<uint8_t, 16> t{};
-		for (uint32_t i = 0; i < 16; i++)
-			t[i] = static_cast<uint8_t>(bmc_lut_encode(i, 4));
-		return t;
-	}();
-	// 8-bit BMC lookup table: 256 entries (512 bytes in flash)
-	// Index: 8-bit data value (0-255), always phase=true start
-	static constexpr auto BMC_LUT_8 = [] 
-	{
-		std::array<uint16_t, 256> t{};
-		for (uint32_t i = 0; i < 256; i++)
-			t[i] = bmc_lut_encode(i, 8);
-		return t;
-	}();
-
 	void encodeSample(uint32_t dest[2], int16_t sample, bool isLeftChannel, uint8_t &frameInBlock) const
 	{
 		const uint8_t *pcm_sample = (uint8_t*)&sample;
