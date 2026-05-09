@@ -160,6 +160,290 @@ private:
     size_t _bufferWords;
 };
 
+class AudioOutputSPDIF : public AudioOutput
+{
+public:
+    AudioOutputSPDIF(int dout_pin = SPDIF_OUT_PIN_DEFAULT) : hertz(48000),
+                                                    i2sOn(false),
+                                                    doutPin(dout_pin),
+                                                    frame_num(0)
+	{ }
+    
+    virtual ~AudioOutputSPDIF() { stop(); }
+    
+    bool setBuffers(int dmaBuffers = SPDIF_DMA_BUF_COUNT_DEFAULT, int dmaBufferBytes = SPDIF_DMA_BUF_SIZE_DEFAULT * 4) {
+		if (i2sOn || (dmaBufferCount < 3) || (dmaBufferBytes & 3))
+			return false;
+		_buffers = dmaBufferCount;
+		_bufferWords = dmaBufferBytes / 4;
+		return true;
+	}
+
+    bool setRate(int hz) override {
+		if (hz < 32000)
+			return false;
+		if (hz == hertz)
+			return true;
+		hertz = hz;
+		if (i2sOn)
+		{
+			i2s_std_clk_config_t clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG((uint32_t)AdjustI2SRate(hz));
+	#if SOC_CLK_APLL_SUPPORTED
+			clk_cfg.clk_src = i2s_clock_src_t::I2S_CLK_SRC_APLL;
+	#endif
+			i2s_channel_disable(_tx_handle);
+			i2s_channel_reconfig_std_clock(_tx_handle, &clk_cfg);
+			buildChannelStatusBits(hz);
+			frame_num = 0;
+			i2s_channel_enable(_tx_handle);
+		}
+		return true;
+	}
+    int getRate() const override { return hertz; }
+
+    bool begin(std::function<void(i2s_chan_handle_t)> initCallback = 0) override {
+		if (i2sOn)
+			return false;
+
+		i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
+		chan_cfg.dma_desc_num = _buffers;
+		chan_cfg.dma_frame_num = _bufferWords;
+		chan_cfg.auto_clear = true;
+		assert(ESP_OK == i2s_new_channel(&chan_cfg, &_tx_handle, nullptr));
+
+		i2s_std_config_t std_cfg = {
+			.clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG((uint32_t)AdjustI2SRate(hertz)),
+			.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO),
+			.gpio_cfg = {
+				.mclk = I2S_GPIO_UNUSED,
+				.bclk = I2S_GPIO_UNUSED,
+				.ws = I2S_GPIO_UNUSED,
+				.dout = (gpio_num_t)doutPin,
+				.din = I2S_GPIO_UNUSED,
+				.invert_flags = {
+					.mclk_inv = false,
+					.bclk_inv = false,
+					.ws_inv = false,
+				},
+			},
+		};
+	#if SOC_CLK_APLL_SUPPORTED
+		std_cfg.clk_cfg.clk_src = i2s_clock_src_t::I2S_CLK_SRC_APLL;
+	#endif
+		assert(ESP_OK == i2s_channel_init_std_mode(_tx_handle, &std_cfg));
+		buildChannelStatusBits(hertz);
+		if (initCallback)
+			initCallback(_tx_handle);
+		assert(ESP_OK == i2s_channel_enable(_tx_handle));
+
+		i2sOn = true;
+		frame_num = 0;
+		return true;
+	}
+
+    bool consumeSample(const int16_t sample[2]) override {
+		if (!i2sOn) 
+			return true;    // Sink the data
+
+		// S/PDIF encoding:
+		//   http://www.hardwarebook.info/S/PDIF
+		// Original sources: Teensy Audio Library
+		//   https://github.com/PaulStoffregen/Audio/blob/master/output_spdif2.cpp
+
+		uint32_t buf[4];
+		uint8_t startingFrameNum = frame_num;
+		encodeSample(&buf[0], sample[0], true, frame_num);
+		//encodeSample(&buf[2], (channels > 1 ) ? sample[1] : sample[0], false, frame_num);
+		encodeSample(&buf[2], sample[1], false, frame_num);
+		size_t bytes_written;
+		esp_err_t ret = i2s_channel_write(_tx_handle, (const char*)&buf, 8 * 2, &bytes_written, 10);
+		// If we didn't write all bytes, return false early and do not increment frame_num
+		if ((ret != ESP_OK) || (bytes_written != (8 * 2))) 
+		{
+			frame_num = startingFrameNum;
+			return false;
+		}   
+		return true;
+}
+
+    bool stop() override {
+		if (i2sOn) {
+			i2sOn = false;
+			i2s_channel_disable(_tx_handle);
+			i2s_del_channel(_tx_handle);
+			_tx_handle = 0;
+			frame_num = 0;
+		}
+		return true;
+	}
+
+protected:
+    const uint32_t VUCP_PREAMBLE_B = 0xCCE80000; // 11001100 11101000
+    const uint32_t VUCP_PREAMBLE_M = 0xCCE20000; // 11001100 11100010
+    const uint32_t VUCP_PREAMBLE_W = 0xCCE40000; // 11001100 11100100
+
+    inline int AdjustI2SRate(int hz) { return 2 * hz; }
+    void buildChannelStatusBits(int sampleRate);
+    inline bool getChannelStatusBit(uint8_t frame) { return (channel_status_[frame >> 3] >> (frame & 7)) & 1; }
+	
+	
+	// Constexpr BMC encoder for compile-time LUT generation.
+	// Encodes with start phase=true (HIGH). The complement property allows phase=false
+	// via XOR: bmc_encode(v, N, false) == bmc_encode(v, N, true) ^ mask
+	static constexpr uint16_t bmc_lut_encode(uint32_t data, uint8_t num_bits) 
+	{
+		uint16_t bmc = 0;
+		bool phase = true;
+		for (uint8_t i = 0; i < num_bits; i++) 
+		{
+			bool bit = (data >> i) & 1;
+			uint8_t bmc_pair = phase ? (bit ? 0b01 : 0b00) : (bit ? 0b10 : 0b11);
+			bmc |= static_cast<uint16_t>(bmc_pair) << ((num_bits - 1 - i) * 2);
+			if (!bit)
+				phase = !phase;
+		}
+		return bmc;
+	}
+
+	static constexpr auto BMC_LUT_4 = [] 
+	{
+		std::array<uint8_t, 16> t{};
+		for (uint32_t i = 0; i < 16; i++)
+			t[i] = static_cast<uint8_t>(bmc_lut_encode(i, 4));
+		return t;
+	}();
+	// 8-bit BMC lookup table: 256 entries (512 bytes in flash)
+	// Index: 8-bit data value (0-255), always phase=true start
+	static constexpr auto BMC_LUT_8 = [] 
+	{
+		std::array<uint16_t, 256> t{};
+		for (uint32_t i = 0; i < 256; i++)
+			t[i] = bmc_lut_encode(i, 8);
+		return t;
+	}();
+
+	void encodeSample(uint32_t dest[2], int16_t sample, bool isLeftChannel, uint8_t &frameInBlock) const
+	{
+		const uint8_t *pcm_sample = (uint8_t*)&sample;
+		//uint32_t raw_subframe = ((uint32_t)((uint16_t)sample)) << 12;
+		uint32_t raw_subframe = (static_cast<uint32_t>(pcm_sample[1]) << 20) | (static_cast<uint32_t>(pcm_sample[0]) << 12);
+
+		bool c_bit = getChannelStatusBit(frameInBlock);
+		if (c_bit)
+			raw_subframe |= (1U << 30);
+
+		uint32_t bits_4_30 = (raw_subframe >> 4) & 0x07FFFFFF;  // 27 bits (4-30)
+		uint32_t ones_count = __builtin_popcount(bits_4_30);
+		uint32_t parity = ones_count & 1;  // 1 if odd count, 0 if even
+		raw_subframe |= parity << 31;      // Set P bit to make total even
+
+		static constexpr uint8_t PREAMBLE_B = 0x17;  // Block start (left channel, frame 0)
+		static constexpr uint8_t PREAMBLE_M = 0x1d;  // Left channel (not block start)
+		static constexpr uint8_t PREAMBLE_W = 0x1b;  // Right channel
+		// ============================================================================
+		// Select preamble based on position in block and channel
+		// ============================================================================
+		// B = block start (left channel, frame 0 of 192-frame block)
+		// M = left channel (frames 1-191)
+		// W = right channel (all frames)
+		uint8_t preamble;
+		if (isLeftChannel) 
+			preamble = (frameInBlock == 0) ? PREAMBLE_B : PREAMBLE_M;
+		else 
+			preamble = PREAMBLE_W;
+		
+		// ============================================================================
+		// BMC encode the data portion (bits 4-31) using lookup tables
+		// ============================================================================
+		// The I2S uses 16-bit halfword swap: bits 16-31 transmit before bits 0-15.
+		// This applies to BOTH word[0] and word[1].
+		//
+		// word[0] transmission order: [16-23] → [24-31] → [0-7] → [8-15]
+		// For correct S/PDIF subframe order (preamble → aux → audio):
+		//   - bits 16-23: preamble (8 BMC bits)
+		//   - bits 24-31: BMC(subframe bits 4-7) - first aux nibble
+		//   - bits 0-7:   BMC(subframe bits 8-11) - second aux nibble
+		//   - bits 8-15:  BMC(subframe bits 12-15) - audio low nibble
+		//
+		// word[1] transmission order: [16-31] → [0-15]
+		// For correct S/PDIF subframe order:
+		//   - bits 16-31: BMC(subframe bits 16-23) - audio mid byte
+		//   - bits 0-15:  BMC(subframe bits 24-31) - audio high nibble + VUCP
+		// ============================================================================
+
+		// All preambles end at phase HIGH. Bits 4-11 are always zero for 16-bit audio;
+		// two zero nibbles flip phase 8 times total → back to HIGH.
+		// So bits 12-15 always start encoding at phase=true.
+
+		// Bits 12-15: 4-bit LUT lookup (always phase=true start)
+		uint32_t nibble = (raw_subframe >> 12) & 0xF;
+		uint32_t bmc_12_15 = BMC_LUT_4[nibble];
+
+		// Phase tracking via branchless XOR mask:
+		// - 0x0000 means phase=true (use LUT value directly)
+		// - 0xFFFF means phase=false (complement LUT value)
+		// End phase = start XOR (popcount & 1) since zero-bits flip phase,
+		// and for even bit widths: #zeros parity == popcount parity.
+		uint32_t phase_mask = -(__builtin_popcount(nibble) & 1u) & 0xFFFF;
+
+		// Bits 16-23: 8-bit LUT lookup with phase correction
+		uint32_t byte_mid = (raw_subframe >> 16) & 0xFF;
+		uint32_t bmc_16_23 = BMC_LUT_8[byte_mid] ^ phase_mask;
+		phase_mask ^= -(__builtin_popcount(byte_mid) & 1u) & 0xFFFF;
+
+		// Bits 24-31: 8-bit LUT lookup with phase correction
+		uint32_t byte_hi = (raw_subframe >> 24) & 0xFF;
+		uint32_t bmc_24_31 = BMC_LUT_8[byte_hi] ^ phase_mask;
+
+		// ============================================================================
+		// Combine with correct positioning for I2S transmission
+		// ============================================================================
+		// I2S with halfword swap: transmits bits 16-31, then bits 0-15.
+		// Within each halfword, MSB (highest bit) is transmitted first.
+		//
+		// For upper halfword (bits 16-31): bit 31 → bit 16
+		// For lower halfword (bits 0-15):  bit 15 → bit 0
+		//
+		// Desired S/PDIF order: preamble → bmc_4_7 → bmc_8_11 → bmc_12_15
+		//
+		// word[0] layout for correct transmission:
+		//   bits 24-31: preamble        (transmitted 1st, as MSB of upper halfword)
+		//   bits 16-23: BMC_ZERO_NIBBLE (transmitted 2nd, aux bits 4-7)
+		//   bits 8-15:  BMC_ZERO_NIBBLE (transmitted 3rd, aux bits 8-11)
+		//   bits 0-7:   bmc_12_15       (transmitted 4th, audio low nibble)
+		//
+		// word[1] layout:
+		//   bits 16-31: bmc_16_23 (transmitted 5th)
+		//   bits 0-15:  bmc_24_31 (transmitted 6th)
+
+		// BMC encoding of 4 zero bits starting at phase HIGH: 00_11_00_11 = 0x33
+		// Since both aux nibbles (bits 4-7, 8-11) are zero for 16-bit audio and phase is preserved, both are 0x33.
+		static constexpr uint32_t BMC_ZERO_NIBBLE = 0x33;    
+		static constexpr uint16_t SPDIF_BLOCK_SAMPLES = 192;
+
+		dest[0] = bmc_12_15 | (BMC_ZERO_NIBBLE << 8) | (BMC_ZERO_NIBBLE << 16) | (static_cast<uint32_t>(preamble) << 24);      
+		dest[1] = bmc_24_31 | (bmc_16_23 << 16);
+
+		// ============================================================================
+		// Update position tracking
+		// ============================================================================
+		if (!isLeftChannel) 
+		{
+			// Completed a stereo frame, advance frame counter
+			if (++frameInBlock >= SPDIF_BLOCK_SAMPLES) 
+				frameInBlock = 0;
+		}
+	}
+
+    uint16_t hertz;
+    bool i2sOn;
+    int8_t doutPin;
+    uint8_t frame_num;
+    size_t _buffers;
+    size_t _bufferWords;
+    uint8_t channel_status_[24];
+};
+
 class VBanPacket
 {
 public:
